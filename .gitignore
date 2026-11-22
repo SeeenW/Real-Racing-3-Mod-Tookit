@@ -1,0 +1,46 @@
+# --- build output -------------------------------------------------------
+# The release is built from source with tools/build_exe.py; it is not a
+# source file, and at ~119 MB it does not belong in a git history.
+/release/
+/_build/
+/work/
+
+# --- this machine only --------------------------------------------------
+/settings.ini
+/_tmp/
+/_tmp.dds
+/preview_*.png
+rrmod_check.log
+rrmod_crash.log
+
+# --- game data, not ours to publish ------------------------------------
+# re/ holds files pulled out of the shipped game (plists, .bin, .nct tables)
+# and rrmod_check/ is a dump the program writes while it runs.  Keeping them
+# out of a public repository is the difference between "a tool that reads the
+# game" and "a copy of the game".
+/re/
+/rrmod_check/
+
+# --- python -------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- vendored toolchains under tools/ ----------------------------------
+# Downloaded separately: Ghidra, a JDK, Monkey Tool, RenderDoc, NinjaRipper
+# and the format converters.  Together they are ~7.5 GB and none of them is
+# this project's code.
+/tools/ghidra_12.1.4_PUBLIC/
+/tools/ghidra_projects/
+/tools/ghidra_user/
+/tools/ghidra_tmp/
+/tools/jdk21/
+/tools/Monkey.Tool.1.3.1/
+/tools/renderdoc_portable/
+/tools/ninjaripper/
+/tools/m3g2fbx/
+/tools/nr_importer/
+/tools/monkeytool_src/
+/tools/nct2xml/
+/tools/*.zip

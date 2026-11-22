@@ -1,0 +1,2063 @@
+{
+ "&File": [
+  "MainWindow"
+ ],
+ "&Tools": [
+  "MainWindow"
+ ],
+ "&View": [
+  "MainWindow"
+ ],
+ "(no brand chosen)": [
+  "MainWindow"
+ ],
+ "(no picture)": [
+  "TrackPickerDialog"
+ ],
+ "...": [
+  "WelcomeDialog",
+  "MainWindow"
+ ],
+ "1. The exported folder  (optional when changing a car)": [
+  "BuildDialog"
+ ],
+ "1. What it is called": [
+  "SeriesDialog"
+ ],
+ "167 playlist(s) in scope, 498 slot value(s) would change": [
+  "BatchDialog"
+ ],
+ "1b. The textures in the folder": [
+  "BuildDialog"
+ ],
+ "2. What to copy": [
+  "SeriesDialog"
+ ],
+ "2. What to do with it": [
+  "BuildDialog"
+ ],
+ "2012_lexus_lfa_wing  (must start with a number)": [
+  "BuildDialog"
+ ],
+ "3. Its wheels": [
+  "BuildDialog"
+ ],
+ "3. The picture on the menu": [
+  "SeriesDialog"
+ ],
+ "4. What it drives like": [
+  "BuildDialog"
+ ],
+ "4. Which cars may enter": [
+  "SeriesDialog"
+ ],
+ "4. Which paints it comes with": [
+  "BuildDialog"
+ ],
+ "5. The events": [
+  "SeriesDialog"
+ ],
+ "5. When the wing moves": [
+  "BuildDialog"
+ ],
+ "6. Where it races": [
+  "BuildDialog"
+ ],
+ "A car is identified by its appearance record, not its file name - 352 of 540 cars differ between the two. rr3mods.json remembers which side each car is on; the path is below, because the game folder itself is usually read-only and the file cannot live there.": [
+  "MainWindow"
+ ],
+ "A car's own pages are named the way its models are: misc.png becomes <car>_misc, wheel.png becomes <car>_wheel. Pick a picture for a slot and it is converted to the texture format chosen in Settings when you press Save - not when you pick it.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "A manager for Real Racing 3 car mods: it reads the game's own tables so it can tell a car you made from one that shipped, keeps the three asset manifests honest after every edit, and pushes the result to a device over adb.": [
+  "MainWindow"
+ ],
+ "A material with no slot in liveryStringTable.bin.nct cannot be named by any car, so it never appears in the Parts or Paints dropdowns. This box hides those.": [
+  "MainWindow"
+ ],
+ "A mesh whose name is not in the string table is skipped by the engine - the log calls it an unreferenced mesh. The game keeps a per-car list of part names, so an invented name can never be drawn; borrowing a shipped name this car leaves empty gives the part an identity the engine already knows. Rename the mesh in Blender to the name shown here.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "A new car gets its own figures whether or not you tick this. When modifying a car that is already installed the numbers are left alone unless you ask, because a spec edit is easy to make and hard to notice afterwards.": [
+  "BuildDialog"
+ ],
+ "A new car with no series is a car the game cannot offer you: it sits in the showroom and nothing runs it. Tick the box to have one made for it in a menu group of its own, running the same races as the template. Leave it alone to add the car without touching the career file.": [
+  "BuildDialog"
+ ],
+ "A pack is one file holding the files and the list of what has to be there before they work. The list is checked when someone opens the pack, not when they install it, so a missing driver pose is a sentence rather than a car with no driver in it.": [
+  "MainWindow"
+ ],
+ "A pack somebody sent you": [
+  "MainWindow"
+ ],
+ "A page in vehicles/common is shared: the tyres, discs, glass and interior weaves every car can point at. Changing one changes every car that names it, so a page is only deleted when this program brought it and nothing names it any more.": [
+  "MainWindow"
+ ],
+ "A PNG or JPEG; it is resized to the size the game's own cards use": [
+  "SeriesDialog"
+ ],
+ "A record needs a code point the font already has, or a picture the game already ships": [
+  "MainWindow"
+ ],
+ "A record whose code point is not in the font shows as nothing": [
+  "MainWindow"
+ ],
+ "A second, untouched install lets the manager tell the game's own cars from yours exactly. Without it the first scan is taken as the baseline.": [
+  "WelcomeDialog"
+ ],
+ "A series whose id is above the highest id the game shipped with": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "A test series for the Lexus LFA.": [
+  "SeriesDialog"
+ ],
+ "About": [
+  "MainWindow"
+ ],
+ "Active aero": [
+  "BuildDialog"
+ ],
+ "adb port": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Add": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "SeriesDialog",
+  "BuildDialog"
+ ],
+ "Add a brand...": [
+  "MainWindow"
+ ],
+ "Add a new material that is a copy of the chosen row, with a name of its own and a livery slot so a car can wear it": [
+  "MainWindow"
+ ],
+ "Add a page from a picture...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Add a record...": [
+  "MainWindow"
+ ],
+ "Add a scheme...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Add a series": [
+  "SeriesDialog"
+ ],
+ "Add a series...": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Add a texture...": [
+  "MainWindow"
+ ],
+ "Add a tier": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Add clip": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Add events...": [
+  "SeriesDialog"
+ ],
+ "Add or replace the logo picture of the chosen brand": [
+  "MainWindow"
+ ],
+ "Adopt as mod": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "After": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "All": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "All 167 playlists": [
+  "BatchDialog"
+ ],
+ "Also change what it drives like": [
+  "BuildDialog"
+ ],
+ "Also write the donor's file names next to the new ones": [
+  "BuildDialog"
+ ],
+ "Animation": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Appearance id": [
+  "BuildDialog"
+ ],
+ "Application": [
+  "MainWindow"
+ ],
+ "Applied through the shaders (texture2DWithBias / the NOBIAS feature). A device that cannot bias a texture lookup reports 0, so this reads back as 0 even though the file says -2.0.": [
+  "BootLogDialog"
+ ],
+ "Apply": [
+  "BatchDialog"
+ ],
+ "Apply to all": [
+  "BuildDialog"
+ ],
+ "Ask adb what it can see, and fill the box above": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Aspiration": [
+  "BuildDialog"
+ ],
+ "at": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Atlas": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Audio files": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "auto": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Auto": [
+  "BuildDialog"
+ ],
+ "back at": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Back up this car...": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Backups of every file the manager rewrites go to _rrmod_backup in the game folder; File > Undo last edit puts them back.": [
+  "MainWindow"
+ ],
+ "Batch edit playlists": [
+  "BatchDialog"
+ ],
+ "Batch edit the ticked events": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Batch edit...": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Becomes": [
+  "BuildDialog"
+ ],
+ "Behaviour": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Borrow a shipped name...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Brand": [
+  "MainWindow"
+ ],
+ "Brands": [
+  "MainWindow"
+ ],
+ "Brought by": [
+  "MainWindow"
+ ],
+ "Browse...": [
+  "BuildDialog"
+ ],
+ "Build": [
+  "BuildDialog"
+ ],
+ "Build a car": [
+  "BuildDialog"
+ ],
+ "Build a car...": [
+  "MainWindow"
+ ],
+ "Cancel": [
+  "SeriesDialog",
+  "EventDialog",
+  "CarPickerDialog",
+  "TrackPickerDialog",
+  "BatchDialog",
+  "BuildDialog"
+ ],
+ "Car": [
+  "MainWindow",
+  "CarTable",
+  "CarsPage",
+  "CarPickerDialog",
+  "BuildDialog"
+ ],
+ "car ids separated by commas, e.g. 88,611": [
+  "SeriesDialog"
+ ],
+ "Car pages": [
+  "MainWindow"
+ ],
+ "Career": [
+  "MainWindow"
+ ],
+ "Cars": [
+  "MainWindow"
+ ],
+ "Category": [
+  "MainWindow"
+ ],
+ "Change event...": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Change one event in place - its track, type, laps, fame or reward - without rebuilding the tiers": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Change this record...": [
+  "MainWindow"
+ ],
+ "Change this series...": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Check": [
+  "BuildDialog"
+ ],
+ "Check a boot log": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Check log": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Choose a picture...": [
+  "SeriesDialog"
+ ],
+ "Choose by manufacturer, with pictures": [
+  "BuildDialog"
+ ],
+ "Choose cars by manufacturer, with pictures": [
+  "SeriesDialog"
+ ],
+ "Choose the game's data folder": [
+  "WelcomeDialog"
+ ],
+ "Choose the picture this slot should load instead": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Choose tracks and how each race runs": [
+  "SeriesDialog"
+ ],
+ "Choose where the undo copies are kept": [
+  "MainWindow"
+ ],
+ "Choose which texture page this part samples, and whether that file lives in common/ or in this car's own folder. The page is chosen by the part's tag, so every mesh with the same _mm_<tag> moves with it.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Circuit / event": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Class": [
+  "MainWindow",
+  "CarTable",
+  "CarsPage",
+  "CarPickerDialog"
+ ],
+ "Clear": [
+  "MainWindow",
+  "GfxPage",
+  "MusicPage",
+  "BatchDialog"
+ ],
+ "Clear filters": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Clear slot": [
+  "BuildDialog"
+ ],
+ "Clear the list": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Clip": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Clips": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Close": [
+  "BootLogDialog"
+ ],
+ "Colour": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Compare the files this install has changed against the device and list the ones that are not there or do not match": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Convert textures...": [
+  "MainWindow"
+ ],
+ "Copies the shape of STREAM_PURE_STOCK_CHALLENGE_TITLE: its requirement curves, its tier layout and its event types. Ids, keys, cars, tracks and laps are rewritten.": [
+  "SeriesDialog"
+ ],
+ "Copy a scheme into a new paint preset and give it its own body atlas": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Copy a scheme into a new paint preset and give it its own body atlas - the same thing the Cars page's paint section does": [
+  "BuildDialog"
+ ],
+ "Copy a template's shape and give it your own title, cars, tracks and laps": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Copy an .mp3 into audio/music": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Copy its files into the game folder; one undo step takes it back": [
+  "MainWindow"
+ ],
+ "Copy races from": [
+  "BuildDialog"
+ ],
+ "Copy the last tier of this series and put it on the end; every existing tier keeps its id": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Copy the two files into .depot and restart": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Copy this one...": [
+  "MainWindow"
+ ],
+ "Copying a material appends a block at the end of the material table, so every existing block stays where it was; deleting a copy splices that one block out. A field inside a block is not edited here - the records have no length prefixes, so one wrong byte would shift everything after it.": [
+  "MainWindow"
+ ],
+ "Create a new car  (clone a donor's id and tables, then swap in these files)": [
+  "BuildDialog"
+ ],
+ "Decals": [
+  "MainWindow"
+ ],
+ "Decode the selected page and write it out, so it can be edited in any paint program": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Delete mod": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Delete scheme(s)...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Delete these steps and their saved copies": [
+  "MainWindow"
+ ],
+ "Delete this copy": [
+  "MainWindow"
+ ],
+ "Delete this page": [
+  "MainWindow"
+ ],
+ "Delete...": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Dependencies": [
+  "MainWindow"
+ ],
+ "Description": [
+  "SeriesDialog"
+ ],
+ "Device": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Device path": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Did the profile take effect?": [
+  "BootLogDialog"
+ ],
+ "Display key": [
+  "BuildDialog"
+ ],
+ "Display name": [
+  "MainWindow"
+ ],
+ "Donor": [
+  "BuildDialog"
+ ],
+ "Double-click an event to change it. Changing one event leaves the other events and every tier id where they are.": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Draw a new shape...": [
+  "MainWindow"
+ ],
+ "Draw a picture of this car into the showroom atlases": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Draw the wheel at exactly the size it was modelled at": [
+  "BuildDialog"
+ ],
+ "Draws": [
+  "MainWindow"
+ ],
+ "Driver pose": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Drop the selected clip": [
+  "BuildDialog"
+ ],
+ "Drop the tier of the selected row; a series must keep at least one": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Each page is written in whichever family this install already holds for it. That is the safe choice: the GPU only reads the family its data package was built for.": [
+  "MainWindow"
+ ],
+ "Empty this list. Nothing on disk or on the device is touched": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "empty: derived for a new car, kept for an installed one": [
+  "BuildDialog"
+ ],
+ "empty: derived from the folder name, or kept as it is": [
+  "BuildDialog"
+ ],
+ "Encode a picture and put it in this shared folder": [
+  "MainWindow"
+ ],
+ "Encode a picture into a new page and put it in common/ (shared with every car) or in this car's own folder. Pick the format: DXT, ETC1 or ATC can be written, PVRTC cannot.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Encode every picture chosen here and write it into the car's folder": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Encode your picture into the page the game loads. It has to be the same size.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "End": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Engine": [
+  "BootLogDialog"
+ ],
+ "Engine sound": [
+  "BuildDialog"
+ ],
+ "English": [
+  "MainWindow"
+ ],
+ "Event": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Event 2034": [
+  "EventDialog"
+ ],
+ "Events": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Every picture this scheme loads - the body and any page it overrides": [
+  "BuildDialog"
+ ],
+ "Every shape the vinyl editor offers comes from one table, custom.decals.nct, and every shape it draws comes from one font, r3_decals.ttf. A row here that says the glyph is missing is a record the game will show as nothing.": [
+  "MainWindow"
+ ],
+ "Every slot the game has, and which file fills it. The names are worked out from the files themselves - LOD_A.m3g is the A body LOD, SHARED.m3g the shared model, INT_A.m3g the cockpit - so the folder needs nothing but the exports. Select a row and press Set file... to correct a guess, or to replace that one file of a car that is already installed without choosing a folder at all.": [
+  "BuildDialog"
+ ],
+ "Everything": [
+  "MainWindow"
+ ],
+ "everything this install has edited": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Fame": [
+  "MainWindow",
+  "SeriesPage",
+  "EventDialog"
+ ],
+ "File": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "MusicPage",
+  "BuildDialog"
+ ],
+ "Files": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Filter": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Filter brands": [
+  "MainWindow"
+ ],
+ "Filter by mesh, material or page": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Filter by name, application or flag": [
+  "MainWindow"
+ ],
+ "Filter by name, category or id": [
+  "MainWindow"
+ ],
+ "Filter by name, make or model": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Filter by name, make, class or id": [
+  "CarPickerDialog"
+ ],
+ "Filter by page name": [
+  "MainWindow"
+ ],
+ "Filter circuits and events": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Filter circuits and layouts": [
+  "TrackPickerDialog"
+ ],
+ "Filter keys": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Filter series": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Find device": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Finish": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Finish for all of them": [
+  "BuildDialog"
+ ],
+ "Flags": [
+  "MainWindow"
+ ],
+ "Folder of exported .m3g files - leave empty to keep the car's own": [
+  "BuildDialog"
+ ],
+ "Folder...": [
+  "MainWindow"
+ ],
+ "for": [
+  "SeriesDialog"
+ ],
+ "Forget": [
+  "MainWindow"
+ ],
+ "Forget a brand this program added": [
+  "MainWindow"
+ ],
+ "Forget the edits made here and read again": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Forget this change": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "from": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "From": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "From the wheel points": [
+  "BuildDialog"
+ ],
+ "Front scale": [
+  "BuildDialog"
+ ],
+ "Give it a logo...": [
+  "MainWindow"
+ ],
+ "Give it a picture...": [
+  "TrackPickerDialog"
+ ],
+ "Give the selected part": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Go back to the colours the donor shipped with": [
+  "BuildDialog"
+ ],
+ "Go back to the file on disk": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "gold": [
+  "BuildDialog"
+ ],
+ "Graphics": [
+  "MainWindow"
+ ],
+ "Hide materials no shipped car points at": [
+  "MainWindow"
+ ],
+ "Hide the 76 cars that borrow another car's body through appearances.link.nct - editing their geometry means editing the car they borrow from": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Hide the pages no car names": [
+  "MainWindow"
+ ],
+ "Hide the pages no track names": [
+  "MainWindow"
+ ],
+ "History": [
+  "MainWindow"
+ ],
+ "History panel": [
+  "MainWindow"
+ ],
+ "How the showroom lists the car. The aspiration and the layout are the two words the game filters on, so only its own values are offered; the unlock rule is what a player has to do before it can be bought, and the two prices are what it costs.": [
+  "BuildDialog"
+ ],
+ "Id": [
+  "MainWindow",
+  "CarTable",
+  "CarsPage",
+  "SeriesPage",
+  "CarPickerDialog"
+ ],
+ "Import a song...": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Install": [
+  "WelcomeDialog"
+ ],
+ "Install its pictures as": [
+  "MainWindow"
+ ],
+ "Install this pack": [
+  "MainWindow"
+ ],
+ "Keep": [
+  "BuildDialog"
+ ],
+ "Keep my per-key changes": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Keep this step when the limit starts dropping the oldest ones": [
+  "MainWindow"
+ ],
+ "Key": [
+  "MainWindow",
+  "GfxPage",
+  "BootLogDialog"
+ ],
+ "Keys": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Kind": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Language": [
+  "MainWindow"
+ ],
+ "Laps": [
+  "MainWindow",
+  "SeriesPage",
+  "EventDialog"
+ ],
+ "laps": [
+  "SeriesDialog"
+ ],
+ "Layout": [
+  "BuildDialog"
+ ],
+ "leave empty for a car with no rule": [
+  "BuildDialog"
+ ],
+ "leave empty to keep the copied group's picture": [
+  "SeriesDialog"
+ ],
+ "Leave empty to keep whatever the template allows. A car id is the number in front of its folder name in vehicles/data.": [
+  "SeriesDialog"
+ ],
+ "leave empty to look for one, or type host:port / emulator-5554": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "leave empty to name it after the car": [
+  "BuildDialog"
+ ],
+ "leave empty to use the group above, or name a new one to create it": [
+  "SeriesDialog"
+ ],
+ "Leave slot 1 alone": [
+  "BatchDialog"
+ ],
+ "Leave the slot as it is - nothing is written for it": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Leave this page alone - the car keeps the one it has": [
+  "BuildDialog"
+ ],
+ "Leave this slot alone - the donor's own file stays": [
+  "BuildDialog"
+ ],
+ "LFA Cup": [
+  "SeriesDialog"
+ ],
+ "List devices": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Load the career out of the device. Use this before editing once a series has been added there - the local copy of the game does not have it, and pushing that copy would delete it.": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Loaded from": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Loads now": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Local file": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "LODs": [
+  "MainWindow",
+  "CarTable",
+  "CarsPage",
+  "CarPickerDialog"
+ ],
+ "Logo": [
+  "MainWindow"
+ ],
+ "Make": [
+  "MainWindow",
+  "CarsPage",
+  "CarPickerDialog",
+  "BuildDialog"
+ ],
+ "Make a series for it": [
+  "BuildDialog"
+ ],
+ "Match the mesh (1:1)": [
+  "BuildDialog"
+ ],
+ "Material": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Materials": [
+  "MainWindow"
+ ],
+ "Menu group": [
+  "SeriesDialog",
+  "BuildDialog"
+ ],
+ "Mesh": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Meshes that read it": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Mod manager": [
+  "MainWindow"
+ ],
+ "Mod studio": [
+  "MainWindow"
+ ],
+ "Model": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Model token": [
+  "BuildDialog"
+ ],
+ "Modify a car that is already installed  (keeps its id, tables and paints)": [
+  "BuildDialog"
+ ],
+ "Music": [
+  "MainWindow"
+ ],
+ "Music_Track_1": [
+  "MainWindow",
+  "MusicPage",
+  "BatchDialog"
+ ],
+ "Music_Track_2": [
+  "MainWindow",
+  "MusicPage",
+  "BatchDialog"
+ ],
+ "Music_Track_3": [
+  "MainWindow",
+  "MusicPage",
+  "BatchDialog"
+ ],
+ "Name a manufacturer that is not in the game, and give it a logo": [
+  "MainWindow"
+ ],
+ "Name key": [
+  "MainWindow"
+ ],
+ "Named by": [
+  "MainWindow"
+ ],
+ "New car": [
+  "BuildDialog"
+ ],
+ "New car id": [
+  "BuildDialog"
+ ],
+ "New events run as": [
+  "SeriesDialog"
+ ],
+ "New folder name": [
+  "BuildDialog"
+ ],
+ "New group": [
+  "SeriesDialog"
+ ],
+ "New picture": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "No _animations.xml yet; add clips below if the car's wing is meant to move.": [
+  "BuildDialog"
+ ],
+ "No car selected": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "No car selected.": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "No event selected": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "No exported folder yet.": [
+  "BuildDialog"
+ ],
+ "No folder chosen.": [
+  "BuildDialog"
+ ],
+ "No game folder is open yet.": [
+  "MainWindow"
+ ],
+ "No install loaded.": [
+  "MainWindow",
+  "CarsPage",
+  "GfxPage",
+  "MusicPage",
+  "SeriesPage"
+ ],
+ "No paint scheme pictures in this folder. A file called ext_<colour> - or one in a livery/ subfolder - would be recognised as one, and offered when you add a paint scheme below.": [
+  "BuildDialog"
+ ],
+ "No series selected": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "None": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Not built yet: this one needs a change inside the game's own library, not in its data files": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Not connected": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Note": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Nothing is written here.  Apply stages the plan as unsaved changes; Save on the main page writes the .nct files.": [
+  "BatchDialog"
+ ],
+ "NOTLOCKED, or ROUND:... / QUEST:... / LTS:... / PRIZEONLY:... to gate the car behind something. Empty means no rule at all, which is what 160 shipped cars do.": [
+  "BuildDialog"
+ ],
+ "Now": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "OK": [
+  "EventDialog"
+ ],
+ "one line the person installing it will read": [
+  "MainWindow"
+ ],
+ "Only a page this program added, and that nothing names any more, can be deleted": [
+  "MainWindow"
+ ],
+ "Only brands I added": [
+  "MainWindow"
+ ],
+ "Only cars with a body model": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Only cars with their own geometry": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Only on/off switches": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Only series I made": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Only the ones a car can point at": [
+  "MainWindow"
+ ],
+ "Only the ones in use": [
+  "MainWindow"
+ ],
+ "Only the ones no event plays": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Only the ones that will not draw": [
+  "MainWindow"
+ ],
+ "Only the ones the filter is showing": [
+  "BatchDialog"
+ ],
+ "Only the selected playlist": [
+  "BatchDialog"
+ ],
+ "Only the ticked ones": [
+  "BatchDialog"
+ ],
+ "Only what the plan changes": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Only what you change is written. The other events in this series and every tier id stay where they are.": [
+  "EventDialog"
+ ],
+ "Open": [
+  "WelcomeDialog"
+ ],
+ "Open a pack...": [
+  "MainWindow"
+ ],
+ "Open install...": [
+  "MainWindow"
+ ],
+ "Open one to see what it carries and what it needs. Nothing is written until you press Install.": [
+  "MainWindow"
+ ],
+ "Open the batch dialog with the ticked events as the scope": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Open the folder": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Optional: a pristine copy": [
+  "WelcomeDialog"
+ ],
+ "Overview": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "SeriesPage"
+ ],
+ "Page": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Pages that are named but not here": [
+  "MainWindow"
+ ],
+ "Paint scheme": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Paints": [
+  "MainWindow",
+  "CarTable",
+  "DetailPane",
+  "CarsPage",
+  "CarPickerDialog"
+ ],
+ "Parts": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Patch the game for random music...": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Pick a body atlas...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Pick a colour...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Pick a logcat from a start-up and see which keys the engine actually ended up with": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Pick cars": [
+  "CarPickerDialog"
+ ],
+ "Pick cars...": [
+  "SeriesDialog"
+ ],
+ "Pick tracks": [
+  "TrackPickerDialog"
+ ],
+ "Pick two or more songs.  Each playlist takes a different window of them, so neighbouring events share two of three tracks.": [
+  "BatchDialog"
+ ],
+ "Pick...": [
+  "BuildDialog"
+ ],
+ "Picture in the folder": [
+  "BuildDialog"
+ ],
+ "Pin": [
+  "MainWindow"
+ ],
+ "Pivot (x, y, z)": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Plan": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Plays the part": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Point at the extracted data package: the folder that contains .depot and apk. If you point at a folder above it, the manager looks down one level for files.": [
+  "WelcomeDialog"
+ ],
+ "Point every scheme's body and wing at this finish": [
+  "BuildDialog"
+ ],
+ "Point this slot at a different page from vehicles/common - another tyre, disc, glass or interior weave. Nothing is copied: only the livery row changes": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "PR": [
+  "CarPickerDialog"
+ ],
+ "Preview changes": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Price": [
+  "BuildDialog"
+ ],
+ "Profile": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Publish": [
+  "MainWindow"
+ ],
+ "Publish...": [
+  "MainWindow"
+ ],
+ "Push differences": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Push to device": [
+  "MainWindow",
+  "GfxPage",
+  "SeriesPage"
+ ],
+ "Pushing replaces files inside the game's data folder on the device. The asset lists are merged onto the device's own copies and made read only again afterwards, as the engine expects.": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Put a car back from one of those zips - every file it holds, replacing what is there now": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Put a picture in this page...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Put back the files as they were before the ticked steps, oldest first": [
+  "MainWindow"
+ ],
+ "Put the device's own files back from the copy kept before the most recent push": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Puts a glyph in r3_decals.ttf and the record that names it, in one step": [
+  "MainWindow"
+ ],
+ "Quit": [
+  "WelcomeDialog",
+  "MainWindow"
+ ],
+ "R$": [
+  "BuildDialog"
+ ],
+ "Read a .rr3mod and see what it needs": [
+  "MainWindow"
+ ],
+ "Read from device": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Read the car's files again": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Read the install again": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Rear scale": [
+  "BuildDialog"
+ ],
+ "Reference": [
+  "WelcomeDialog"
+ ],
+ "Reload": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "MusicPage",
+  "SeriesPage"
+ ],
+ "Remove": [
+  "BuildDialog"
+ ],
+ "Remove a material this program added. The game's own 296 are never removed.": [
+  "MainWindow"
+ ],
+ "Remove a tier": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Remove selected": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Remove the car, its spec, its paint schemes and its manifests": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Remove the selected paint schemes. A car needs at least one, so the last one cannot be removed": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Remove the selected schemes. A car needs at least one, so the last one is refused": [
+  "BuildDialog"
+ ],
+ "Remove this record": [
+  "MainWindow"
+ ],
+ "Remove...": [
+  "MainWindow"
+ ],
+ "Rename it, move it to another category, or point it at another picture": [
+  "MainWindow"
+ ],
+ "Renumber these two tracks": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Replace": [
+  "BatchDialog"
+ ],
+ "Rescan": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Reset colours": [
+  "BuildDialog"
+ ],
+ "Reset numbering": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Rest / up / down spanning the whole banim": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Rest, up and down over the whole animation": [
+  "BuildDialog"
+ ],
+ "Reward": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Reward (R$)": [
+  "EventDialog"
+ ],
+ "Roll back from backup...": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Rotates": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "RR3 Mod Manager 0.1.0": [
+  "MainWindow"
+ ],
+ "Runs as": [
+  "EventDialog"
+ ],
+ "Save animation": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Save as": [
+  "MainWindow"
+ ],
+ "Save changes": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Save the paint changes": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Save the texture changes": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Save this page as a PNG...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Save to staging": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Scan for differences": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Seated driver": [
+  "BuildDialog"
+ ],
+ "Seed": [
+  "BatchDialog"
+ ],
+ "Select a car to see its paint schemes.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Select a car to see its parts.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Series": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Series title": [
+  "BuildDialog"
+ ],
+ "Set a picture...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Set adb path...": [
+  "MainWindow"
+ ],
+ "Set file...": [
+  "BuildDialog"
+ ],
+ "Set finish": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Set material": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Set page...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Set the preview picture...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Set window icon...": [
+  "MainWindow"
+ ],
+ "Set, cycle, rotate or replace the songs of many events at once": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Shared car pages": [
+  "MainWindow"
+ ],
+ "Shared track pages": [
+  "MainWindow"
+ ],
+ "Shift the slots by": [
+  "BatchDialog"
+ ],
+ "Shipped": [
+  "MainWindow"
+ ],
+ "Show": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Show audio/music in Explorer": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Show which keys would change": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Size": [
+  "MainWindow",
+  "CarTable",
+  "DetailPane",
+  "CarsPage",
+  "DeployPage"
+ ],
+ "Slot": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Slot 1": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Slot 2": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Slot 3": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Slots": [
+  "BatchDialog"
+ ],
+ "Some builds look a car's files up under the old name; keeping both costs disk space and makes the car load either way": [
+  "BuildDialog"
+ ],
+ "Songs come from audio/music. Saving rewrites the .nct; the engine reads it on the next start.": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Speeds": [
+  "BuildDialog"
+ ],
+ "Start": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Start at": [
+  "BatchDialog"
+ ],
+ "Start from": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Start the plan from the profile above": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Stat": [
+  "BuildDialog"
+ ],
+ "State": [
+  "BootLogDialog"
+ ],
+ "Status": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Swap": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Swap track": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Take a change back...": [
+  "MainWindow"
+ ],
+ "Take the last push back": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Take the next free id and keep it in step with the install": [
+  "BuildDialog"
+ ],
+ "Take the scale from POINT_WHEEL_* in the exported .points - the hub height is the tyre radius when the wheel sits on the ground. This is the scale that made our own car sit right.": [
+  "BuildDialog"
+ ],
+ "Takes the row out of the list; the font and the picture are left alone": [
+  "MainWindow"
+ ],
+ "Target": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Template": [
+  "SeriesDialog"
+ ],
+ "Test": [
+  "MainWindow"
+ ],
+ "Texture format": [
+  "WelcomeDialog"
+ ],
+ "Textures": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "The ... button on a row opens every picture that scheme loads - the body and any page it overrides - so a scheme's atlas, wheels and badges are all set in one place. A picture is converted when you press Build.": [
+  "BuildDialog"
+ ],
+ "The colour the customiser starts from": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "The colour the customiser starts this scheme from": [
+  "BuildDialog"
+ ],
+ "The engine recomputes this from the screen shape after loading, so the shipped profiles do not get their own value back either.": [
+  "BootLogDialog"
+ ],
+ "the file to write": [
+  "MainWindow"
+ ],
+ "The game draws a card for most circuits but stores no layout map; bring your own picture for the ones without one": [
+  "TrackPickerDialog"
+ ],
+ "The game hands out track numbers in name order: the first part alphabetically plays track 0. If a car animates the wrong part, swap two tracks here.": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "The game moves this wing": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "The game's cars may be modified but not deleted. Yours may be both. A car that neither list knows about is left alone until you adopt it.": [
+  "MainWindow"
+ ],
+ "The logo is the game's own art: it is cut from gui_assets/<size>/common/manufacturer_logos. A brand with no logo still works - the menus fall back to the name.": [
+  "MainWindow"
+ ],
+ "The model name written into the spec - the game's own internal name for the car, and what a car with no display name of its own is called.  The folder name gives it for free on a new build; on an installed car it is shown as it is and only a changed value is written.": [
+  "BuildDialog"
+ ],
+ "The pages a car keeps in its own folder - calipers, wheels, lights, the paint mask - are named the way the models are: misc.png becomes <car>_misc, exactly as LOD_A.m3g becomes <car>_a.m3g. A picture is converted to the texture format chosen in Settings when you press Build, not when the folder is read, so a build you cancel writes nothing.": [
+  "BuildDialog"
+ ],
+ "The pages in this car's folder": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "The picture becomes a page of its own in the menu atlas of every screen size, the same way the game's own cards are stored.": [
+  "SeriesDialog"
+ ],
+ "The picture this scheme's body is drawn with": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "The tyres, discs, wheels and interior materials all come from pages here. Changing one changes every mesh that samples it. Only the DXT copies can be written; the ETC, ATC and PVRTC copies of the same picture can be saved out but not put back.": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "These are the car's own paint schemes, in the order the game shows them. Add a scheme to copy one into a new preset, or select one and delete it - a car needs at least one, so the last one is refused. A row marked delete goes when you press Build, and pressing the button on it again puts it back.": [
+  "BuildDialog"
+ ],
+ "These come from the donor's spec file. Change any of them to give the new car its own figures; leave a cell empty to keep the donor's.": [
+  "BuildDialog"
+ ],
+ "This install": [
+  "MainWindow"
+ ],
+ "This pose has no low-poly model of its own, so the outside view uses the generic driver_lod_c.m3g. The game copes; it just looks approximate.": [
+  "BuildDialog"
+ ],
+ "This program's own pages": [
+  "MainWindow"
+ ],
+ "Three songs per playlist, drawn from the pool below.  No playlist repeats a track inside itself and no two neighbours get the same triple.  Change the seed for a different draw.": [
+  "BatchDialog"
+ ],
+ "Tick a switch or pick a value to override it for this profile. Right click a row to drop the override or go back to the shipped value.": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Tick all": [
+  "MainWindow"
+ ],
+ "Tick every difference": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Tick every event the filter is showing": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Tick everything": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Tier": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Tiers": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Tiers and events": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Title": [
+  "SeriesDialog"
+ ],
+ "to": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Track": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "SeriesPage",
+  "EventDialog"
+ ],
+ "Track pages": [
+  "MainWindow"
+ ],
+ "Tracks": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "MusicPage"
+ ],
+ "Tracks/common is the track side's shared folder: 2,313 files of road surface, barriers, crowds and sky. No table names them - the only record is the artist's own path stored inside each track's model, which is where this page reads them from. Nineteen asset lists claim them, one per top folder.": [
+  "MainWindow"
+ ],
+ "Treat an unmanaged car as mine, so it can be edited or deleted": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Two kinds of car": [
+  "MainWindow"
+ ],
+ "Type one number per axle: how much bigger than the exported mesh the wheel should be drawn. The mesh supplies the proportions (and the rim/tyre ratio, so no ring of daylight opens up); the appearance record is written for you. Export the wheel normalised to the shared template and one model serves both axles - the front and rear only differ in the number you type here.": [
+  "BuildDialog"
+ ],
+ "Undo last edit": [
+  "MainWindow"
+ ],
+ "Undo my changes": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Undo these": [
+  "MainWindow"
+ ],
+ "Unit": [
+  "BuildDialog"
+ ],
+ "Unlock rule": [
+  "BuildDialog"
+ ],
+ "Untick": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Untick every difference": [
+  "MainWindow",
+  "DeployPage"
+ ],
+ "Upgrade route": [
+  "BuildDialog"
+ ],
+ "Use a default set": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "Use another shipped page...": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Use this car": [
+  "CarPickerDialog"
+ ],
+ "Use this file for the selected slot instead of the one guessed": [
+  "BuildDialog"
+ ],
+ "Use this finish for the selected scheme": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Use this picture for the selected slot instead of the one guessed from the folder": [
+  "BuildDialog"
+ ],
+ "Use this profile": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Use this track": [
+  "TrackPickerDialog"
+ ],
+ "Used by": [
+  "MainWindow",
+  "MusicPage"
+ ],
+ "Verify manifests": [
+  "MainWindow"
+ ],
+ "Vinyl decals": [
+  "MainWindow"
+ ],
+ "Wanted": [
+  "BootLogDialog"
+ ],
+ "What": [
+  "MainWindow"
+ ],
+ "What it did": [
+  "MainWindow"
+ ],
+ "What it is called": [
+  "MainWindow"
+ ],
+ "What the game calls the car, on the line under the brand.  The brand is shown above it on its own line, so the name here is normally the model alone - ``LFA``, not ``Lexus LFA``; 526 of the 541 shipped cars are named that way, and the fifteen that are not are the NASCAR stock cars.  A car this program builds has the string written into its spec; a shipped car's spec holds a key (``CAR_NAME_LFA``) into gametext.txt and the twelve text_<lang>.txt files instead, and changing it here rewrites that text entry in every language while the key itself stays put.": [
+  "BuildDialog"
+ ],
+ "What the last pack holds": [
+  "MainWindow"
+ ],
+ "What this install has": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "What this is": [
+  "MainWindow"
+ ],
+ "What to do": [
+  "BatchDialog"
+ ],
+ "What to publish": [
+  "MainWindow"
+ ],
+ "When": [
+  "MainWindow"
+ ],
+ "When off, applying a profile replaces every key it names. Keys it does not name are left alone either way.": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Where": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Where is Real Racing 3?": [
+  "WelcomeDialog"
+ ],
+ "Where it is": [
+  "MainWindow"
+ ],
+ "Where the truth lives": [
+  "MainWindow"
+ ],
+ "Where undo copies are kept...": [
+  "MainWindow"
+ ],
+ "Which": [
+  "MainWindow"
+ ],
+ "Which playlists": [
+  "BatchDialog"
+ ],
+ "Which texture set this install was unpacked for. Picking the right one keeps a new page in the family the rest of the install uses; \"work it out from the files\" is right when you are not sure.": [
+  "WelcomeDialog"
+ ],
+ "Will be written as": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage",
+  "BuildDialog"
+ ],
+ "with": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage",
+  "BatchDialog"
+ ],
+ "Without a behaviour in the car's spec the game never plays the animation, however good the curves are. Adding a wing to a car the studio left out needs this, the banim, the xml and the livery rows.": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Writable": [
+  "MainWindow"
+ ],
+ "Write a zip holding this car's files and its parameters, so it can be put back exactly as it is now": [
+  "MainWindow",
+  "CarsPage"
+ ],
+ "Write events.dat.nct and the text files to a staging folder; nothing reaches the device yet": [
+  "MainWindow",
+  "SeriesPage"
+ ],
+ "Write the banim and the xml back into the install": [
+  "MainWindow",
+  "AnimPane",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Write the files": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Write the pack file": [
+  "MainWindow"
+ ],
+ "Write the two files next to the mods file": [
+  "MainWindow",
+  "GfxPage"
+ ],
+ "Write these edits into the game folder": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Write this material for the selected part": [
+  "MainWindow",
+  "DetailPane",
+  "CarsPage"
+ ],
+ "Writes a new series into data/events.dat.nct. The career file is checked by reading it back byte for byte before anything is written, so a mistake here cannot reach the game.": [
+  "BuildDialog"
+ ],
+ "⋯": [
+  "BuildDialog"
+ ],
+ "简体中文": [
+  "MainWindow"
+ ]
+}
