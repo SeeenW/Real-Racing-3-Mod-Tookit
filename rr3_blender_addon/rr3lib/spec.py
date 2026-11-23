@@ -142,6 +142,17 @@ ASPIRATIONS = (b"Nat", b"Turbo", b"Super", b"None", b"Electric", b"Hybrid")
 #: the aspiration and requires it to be at most two characters.
 LAYOUTS = (b"F", b"M", b"R", b"FM")
 
+#: The driven-wheel words, counted over the 541 shipped specs: ``RWD`` 443,
+#: ``AWD`` 82, ``FWD`` 12 and ``RLY`` 3 (the three rally cars - the i20 WRC, the
+#: Yaris WRC and the Puma Rally1 - which use their own handling model).  Unlike
+#: :data:`LAYOUTS` this is *not* what the engine block is found by, so a wrong
+#: value does not hide anything; it still changes how the car drives, so only
+#: these four are offered.
+DRIVETRAINS = (b"RWD", b"AWD", b"FWD", b"RLY")
+
+#: The three strings the game's class filter uses, in the order its screen does.
+CLASSES = (b"Race", b"Supercar", b"Prod")
+
 #: Longest unlock string seen in the shipped files is 101 bytes; the limit is
 #: loose on purpose, because the point is only to reject a runaway length.
 _UNLOCK_MAX = 200
@@ -540,6 +551,56 @@ class Spec:
                     return
         self._locate_name()
 
+    def _refresh(self) -> None:
+        """Recompute every token's byte offset from the current payloads.
+
+        A token's payload can be rewritten in place (the make, the model, the
+        class, the display name), and that changes the file's length without
+        moving the byte offsets the later tokens remember.  Every reader that
+        addresses the file by offset - the engine block, the appearance record,
+        and :meth:`_splice` itself - then looks at the wrong place.
+
+        This recomputes the offsets from the token list rather than running
+        :func:`tokenize` again, because the tokenizer is a heuristic that can
+        mis-split a file whose lengths just changed (see :meth:`_splice`).  The
+        parse that produced this list was correct; only the offsets are stale.
+        """
+        out = []
+        at = 0
+        for kind, _off, _ln, payload in self.tokens:
+            if kind == "s":
+                out.append(["s", at, len(payload), payload])
+                at += 4 + len(payload)
+            else:
+                out.append(["n", at, None, payload])
+                at += len(payload)
+        self.tokens = out
+        self.raw = detokenize(out)
+        self._reindex_name()
+
+    def _retokenize(self, plain: bytes) -> None:
+        """Re-split a file this object has just rewritten, keeping the anchors.
+
+        ``tokenize`` alone is not enough after a write.  It decides "is this word
+        a string length?" by looking at what follows, and the word in front of a
+        brand key is a ``1`` - which, next to a 32-byte key, reads as a one-byte
+        string and shifts every token after it by four bytes.  The file is still
+        valid (the engine reads it by schema) but this reader loses the name, the
+        brand and the PR.
+
+        :func:`parse_spec` anchors that when a file is loaded; a file re-split
+        after a write needs the same treatment, which is what this does.  It also
+        refuses a split that would not detokenize back to the same bytes, so a
+        writer cannot leave the object describing a file it does not have.
+        """
+        tokens = _anchor_car_strings(tokenize(plain), plain)
+        if detokenize(tokens) != plain:
+            raise SpecError("the file did not re-split cleanly after the write, "
+                            "so nothing was written")
+        self.tokens = tokens
+        self.raw = plain
+        self._reindex_name()
+
     # ---- reading -------------------------------------------------------
     @property
     def car_id(self) -> int:
@@ -599,9 +660,7 @@ class Spec:
                                       old=old or None, at=at)
         if patched == blob:
             return False
-        self.tokens = tokenize(patched)
-        self.raw = patched
-        self._reindex_name()
+        self._retokenize(patched)
         return True
 
     def display_name_key(self) -> str:
@@ -726,8 +785,7 @@ class Spec:
             body = struct.pack("<I", len(text)) + text
         else:
             body = b"\x00\x00\x00\x00"
-        self.tokens = tokenize(head + body + tail)
-        self._reindex_name()
+        self._retokenize(head + body + tail)
         return True
 
     # ---- performance ---------------------------------------------------
@@ -924,10 +982,124 @@ class Spec:
             plain = plain[:at] + packed + plain[at + 4:]
             changed.append(key)
         if changed:
-            self.tokens = tokenize(plain)
-            self.raw = plain
-            self._reindex_name()
+            self._retokenize(plain)
         return changed
+
+    def gear_ratios(self) -> list:
+        """The ratio list exactly as the file holds it, or ``[]``.
+
+        The count is the last word of the thirteen-word engine block and the
+        ratios follow it, so this reads ``count`` floats from there.  The last
+        one is not a forward gear - see :meth:`set_gears` - and a one-ratio car's
+        single entry is its final drive.
+        """
+        index = self._engine_index()
+        if index < 0:
+            return []
+        plain = detokenize(self.tokens)
+        base = self.tokens[index][1]
+        if base + 4 > len(plain):
+            return []
+        count = struct.unpack_from("<I", plain, base)[0]
+        if not 1 <= count <= 12 or base + 4 * (13 + count) > len(plain):
+            return []
+        return [struct.unpack_from("<f", plain, base + 4 * (13 + i))[0]
+                for i in range(count)]
+
+    def set_gears(self, count: int) -> bool:
+        """Change how many gear ratios the car has; returns whether it changed.
+
+        The gear count cannot be written on its own the way the other engine
+        figures can: it decides how many ratio floats follow it, so a different
+        number read in place would make the game walk the rest of the block at
+        the wrong stride.  What this does instead is rebuild the ratio list -
+        ``count`` floats right after the thirteen-word block, the last of which
+        is the reverse ratio - and then rewrite the count in front of it.
+
+        A new gear is interpolated geometrically between the two ratios it is
+        squeezed into, because that is the shape a real gearbox has (each gear a
+        constant fraction shorter than the one below) and it keeps the top gear
+        where the designer put it.  Removing a gear drops the one below the top.
+        The reverse ratio and the thirteen words in front are left alone.
+
+        The whole file shifts by four bytes per gear, so everything after it is
+        re-parsed and checked against what it said before: if the name, the
+        figures, the prices or the upgrade route no longer read back, the change
+        is refused rather than written.
+        """
+        count = int(count)
+        if not 1 <= count <= 12:
+            raise SpecError(f"{count} gears is not a count the game can read "
+                            "(1 to 12)")
+        index = self._engine_index()
+        if index < 0:
+            raise SpecError("the engine block could not be found in this file")
+        plain = detokenize(self.tokens)
+        base = self.tokens[index][1]
+        old = struct.unpack_from("<I", plain, base)[0]
+        if old == count:
+            return False
+        if base + 4 * (13 + old) > len(plain):
+            raise SpecError("the gear ratios run past the end of the file")
+        ratios = [struct.unpack_from("<f", plain, base + 4 * (13 + i))[0]
+                  for i in range(old)]
+        # The last entry is not a forward gear: every shipped car's list ends on
+        # a number larger than the one before it, and a one-ratio car's single
+        # entry is its final drive.  Only the forward ratios are rebuilt.
+        forward, tail_ratio = ratios[:-1], ratios[-1:]
+        if not forward:
+            raise SpecError(
+                f"{count} gears from {old}: this car has a single ratio and no "
+                "forward gear list to rebuild")
+        if count > old:
+            extra = count - old
+            top = forward[-1]
+            low = forward[-2] if len(forward) > 1 else top * 2.2
+            if low <= top:                      # odd data; keep it a step down
+                low = top * 1.35
+            step = (top / low) ** (1.0 / (extra + 1))
+            new = [low * step ** (i + 1) for i in range(extra)]
+            forward = forward[:-1] + new + [top]
+        else:
+            drop = old - count
+            if drop >= len(forward):
+                raise SpecError(f"{old} gears cannot be cut to {count}: there is "
+                                "nothing left but the trailing ratio")
+            # Take the gears just below the top, not the top itself, so the car
+            # keeps the top speed the designer gave it and simply has bigger
+            # steps between what is left.  It also makes "one more gear" and
+            # "one fewer" undo each other, which is what a dialog offers.
+            forward = forward[:-1 - drop] + forward[-1:]
+        rebuilt = forward + list(tail_ratio)
+        before = self.stats()
+        body = b"".join(struct.pack("<f", value) for value in rebuilt)
+        plain = (plain[:base + 4 * 13] + body
+                 + plain[base + 4 * (13 + old):])
+        plain = plain[:base] + struct.pack("<I", count) + plain[base + 4:]
+        self._retokenize(plain)
+        self._verify_gears(before, count)
+        return True
+
+    def _verify_gears(self, before: dict, count: int) -> None:
+        """Refuse the rebuild unless the rest of the file still reads back.
+
+        Four bytes per gear went in or came out, so every token after the ratio
+        list moved.  The reader finds the block by shape and the name by its
+        anchor, so a mis-split would show up here as a field that changed when it
+        should not have - and a spec written in that state is a car the game
+        loads with the wrong numbers.
+        """
+        after = self.stats()
+        if after.get("gears") != count:
+            raise SpecError("the gear count did not read back after the rebuild")
+        for key in ("pr", "pr_max", "power_hp", "torque", "redline", "limiter",
+                    "final_drive", "aspiration", "layout", "route", "unlock",
+                    "cash", "gold", "weight_lb", "top_speed"):
+            if key in before and before.get(key) != after.get(key):
+                raise SpecError(
+                    f"rebuilding the gears changed {key} as well "
+                    f"({before.get(key)!r} -> {after.get(key)!r}), so nothing "
+                    "was written")
 
     # ---- the engine sound ----------------------------------------------
     #
@@ -993,21 +1165,49 @@ class Spec:
     def set_pr(self, value) -> bool:
         """Write the starting PR; returns whether anything changed.
 
-        The PR is writable but ``pr_max`` is not, and that is deliberate: the
-        game recomputes the fully-upgraded figure from the base one and the
-        upgrade route, so a car whose base PR is right and whose maximum is stale
-        shows a wrong number until the player opens the upgrade screen, while a
-        car with a hand-written maximum can end up above or below what its parts
-        add up to.  Leave the second float alone.
-
         Position comes from :meth:`_pr_index`, which finds the ``CAR_NAME_*`` key
         and then checks the shape of the two numbers after it - so this writes
         only where the reader already agreed there is a PR.  33 shipped specs
         have no display-name key at all and therefore no PR; those return
         ``False`` rather than guessing.
+
+        See :meth:`set_pr_max` for what the second float is and why it is
+        offered as an override rather than derived.
         """
         at = self._pr_index()
         if at < 0:
+            return False
+        token = self.tokens[at]
+        if token[0] != "n" or len(token[3]) < 4:
+            return False
+        packed = struct.pack("<f", float(value))
+        if token[3][:4] == packed:
+            return False
+        self.tokens[at][3] = packed + token[3][4:]
+        return True
+
+    def set_pr_max(self, value) -> bool:
+        """Write the fully-upgraded PR; returns whether anything changed.
+
+        This is the number the showroom shows next to the base one, and it is a
+        float of its own - the next word after the base PR, found the same way.
+
+        It is *derived* data in the game's own pipeline: PR is a function of the
+        car's figures, and the maximum is the same function applied after the
+        upgrade route's percentages have been applied.  Two shipped cars with
+        byte-identical figures always carry the same pair of numbers (11 such
+        groups exist), which is how we know it is computed rather than chosen.
+        The formula itself could not be recovered - a quadratic fit over the
+        figures of all 540 cars is still off by three PR points on average - so
+        this writes the number the game displays instead of pretending to
+        recompute it.  A value that does not match what the route and the
+        figures add up to is a car whose upgrade screen disagrees with its card.
+        """
+        at = self._pr_index()
+        if at < 0:
+            return False
+        at += 1
+        if at >= len(self.tokens):
             return False
         token = self.tokens[at]
         if token[0] != "n" or len(token[3]) < 4:
@@ -1111,11 +1311,42 @@ class Spec:
         return out
 
     def _splice(self, at: int, remove: int, insert: bytes) -> None:
-        """Replace ``remove`` bytes at ``at`` and rebuild the token list."""
+        """Replace ``remove`` bytes at ``at`` with a new string token.
+
+        The token list is **not** rebuilt by re-tokenizing.  :func:`tokenize` is
+        a heuristic - it decides whether four bytes are a string length by
+        checking whether the bytes after them are printable - and the byte in
+        front of a string is very often ``01 00 00 00``, a count of one.  Writing
+        a 32-byte string where a 24-byte one was puts ``0x20`` (a space) right
+        after that count, the heuristic then reads "a one-byte string", and every
+        token after it is off by four bytes: the manufacturer key disappears, the
+        display name disappears, and the file is quietly ruined.  So the tokens
+        are moved by hand instead: everything before keeps its place, the
+        replaced token becomes the new payload, and everything after shifts by
+        the length difference.
+        """
         plain = detokenize(self.tokens)
-        plain = plain[:at] + insert + plain[at + remove:]
-        self.tokens = tokenize(plain)
-        self.raw = plain
+        new_plain = plain[:at] + insert + plain[at + remove:]
+        delta = len(insert) - remove
+        payload = insert[4:]
+        tokens = []
+        placed = False
+        for kind, off, ln, old in self.tokens:
+            end = off + (4 + ln if kind == "s" else len(old))
+            if end <= at:
+                tokens.append([kind, off, ln, old])
+            elif off == at:
+                tokens.append(["s", at, len(payload), payload])
+                placed = True
+            elif off > at:
+                tokens.append([kind, off + delta, ln, old])
+            # a token that straddles the cut cannot exist for a well-formed
+            # replacement; dropping it is better than keeping a wrong offset
+        if not placed:
+            tokens.append(["s", at, len(payload), payload])
+            tokens.sort(key=lambda t: t[1])
+        self.tokens = tokens
+        self.raw = new_plain
         self._reindex_name()
 
     def _string_token(self, index: int):
@@ -1214,9 +1445,7 @@ class Spec:
             return False
         plain = (plain[:money] + struct.pack("<II", *new)
                  + plain[money + 8:])
-        self.tokens = tokenize(plain)
-        self.raw = plain
-        self._reindex_name()
+        self._retokenize(plain)
         return True
 
     # ---- the upgrade route ----------------------------------------------
@@ -1291,9 +1520,7 @@ class Spec:
         if current == wanted:
             return False
         plain = plain[:at] + struct.pack("<I", len(wanted)) + wanted + plain[at + 4 + length:]
-        self.tokens = tokenize(plain)
-        self.raw = plain
-        self._reindex_name()
+        self._retokenize(plain)
         return True
 
     def set_stat(self, key: str, value) -> bool:
@@ -1338,7 +1565,72 @@ class Spec:
         if token[3] == new:
             return False
         self.tokens[STAT_CLASS][3] = new
+        self._refresh()
         return True
+
+    def set_drivetrain(self, name: str) -> bool:
+        """Write the driven-wheel word (``RWD``/``AWD``/``FWD``/``RLY``).
+
+        This is a different field from :meth:`set_layout`, and the two are easy
+        to confuse: the layout is *where the engine sits* (``F`` front, ``M``
+        mid, ``R`` rear, ``FM`` front-mid) and the drivetrain is *which wheels
+        it turns*.  A 911 is ``R``/``AWD``; a mid-engined Ferrari is ``M``/``RWD``.
+
+        Only the four words the game ships are accepted, because this one feeds
+        the physics code directly.  One shipped spec (the 2019 Formula 1 AMG GT-R
+        safety car) holds a number where the word belongs; that file is refused
+        rather than guessed at, since there is nowhere to put the string.
+        """
+        wanted = name.encode("ascii")
+        if wanted not in DRIVETRAINS:
+            raise SpecError(f"{name!r} is not a drivetrain the game knows")
+        if STAT_DRIVETRAIN >= len(self.tokens):
+            raise SpecError("this file is too short to hold a drivetrain")
+        token = self.tokens[STAT_DRIVETRAIN]
+        if token[0] != "s":
+            raise SpecError(
+                "this file has no drivetrain string where one belongs - the "
+                "slot holds a number instead")
+        if token[3] == wanted:
+            return False
+        self._splice(token[1], 4 + len(token[3]),
+                     struct.pack("<I", len(wanted)) + wanted)
+        return True
+
+    def manufacturer_key(self) -> str:
+        """The ``CAR_MANUFACTURER_*`` token, or ``""`` when there is none.
+
+        502 of the 540 shipped specs carry one; the rest name the brand in the
+        make string alone, which is what a car built here does.
+        """
+        for token in self.tokens:
+            if token[0] == "s" and token[3].startswith(b"CAR_MANUFACTURER_"):
+                return token[3].decode("ascii", "replace")
+        return ""
+
+    def set_manufacturer(self, key: str) -> bool:
+        """Point the manufacturer key at another brand (``CAR_MANUFACTURER_FERRARI``).
+
+        The brand a car is filed under is the make string (token 3) *and*, on the
+        502 specs that have one, this key.  Writing only the make leaves the old
+        key in place, and the game's brand list reads the key first - so a car
+        re-branded that way still shows up under its old manufacturer.  Both are
+        written together by :func:`rrmod.edit.set_identity`.
+
+        A spec with no key is left alone and ``False`` is returned: inserting one
+        shifts every later field, which the engine cannot survive.
+        """
+        wanted = key.encode("ascii")
+        if not wanted:
+            return False
+        for i, token in enumerate(self.tokens):
+            if token[0] == "s" and token[3].startswith(b"CAR_MANUFACTURER_"):
+                if token[3] == wanted:
+                    return False
+                self._splice(token[1], 4 + len(token[3]),
+                             struct.pack("<I", len(wanted)) + wanted)
+                return True
+        return False
 
     def set_display_name(self, key: str) -> int:
         """Rewrite the display-name token and return how many tokens changed.
@@ -1361,6 +1653,7 @@ class Spec:
             return 0
         self.tokens[self._name_index][3] = new
         self._name_value = new
+        self._refresh()
         return 1
 
     def set_model(self, model: str) -> int:
@@ -1373,6 +1666,8 @@ class Spec:
             if t[0] == "s" and t[3] == old.encode("ascii"):
                 t[3] = model.encode("ascii")
                 n += 1
+        if n:
+            self._refresh()
         return n
 
     def set_make(self, make: str) -> bool:
@@ -1394,6 +1689,7 @@ class Spec:
         if self.tokens[3][3] == new:
             return False
         self.tokens[3][3] = new
+        self._refresh()
         return True
 
     def strings(self) -> list[str]:
@@ -1410,8 +1706,44 @@ class Spec:
                 f"{len(self.tokens)} tokens, {len(self.to_bytes())} bytes")
 
 
+def _anchor_car_strings(tokens: list, raw: bytes) -> list:
+    """Make sure the two ``CAR_*`` markers are whole string tokens.
+
+    :func:`tokenize` decides "is this four bytes a length?" by checking whether
+    what follows is printable, and that guess can be wrong: the field in front of
+    the manufacturer key is a count of ``1``, so ``01 00 00 00`` followed by a
+    string whose length byte is a printable character (32..126 - a 32-character
+    brand key hits it exactly) reads as "a one-byte string", and every token
+    after that point is off by four bytes.  The file is still valid - the engine
+    reads it by schema, not by guessing - but every reader here loses the car's
+    name, its brand key and its PR.
+
+    The two markers are fixed text and unique enough to find in the bytes, so
+    they are re-anchored: the string that contains the marker becomes a token of
+    its own and the bytes either side are tokenized separately.  Nothing else is
+    touched, and the result still detokenizes to the same file byte for byte.
+    """
+    for marker in (b"CAR_MANUFACTURER_", b"CAR_NAME_"):
+        pos = raw.find(marker)
+        if pos < 4:
+            continue
+        start = pos - 4
+        length = struct.unpack_from("<I", raw, start)[0]
+        end = start + 4 + length
+        if not 1 <= length <= 200 or end > len(raw):
+            continue
+        if any(t[0] == "s" and t[1] == start for t in tokens):
+            continue                      # already a proper token
+        head = tokenize(raw[:start])
+        middle = ["s", start, length, raw[pos:pos + length]]
+        tail = [[kind, off + end, ln, payload]
+                for kind, off, ln, payload in tokenize(raw[end:])]
+        tokens = head + [middle] + tail
+    return tokens
+
+
 def parse_spec(data: bytes) -> Spec:
-    toks = tokenize(data)
+    toks = _anchor_car_strings(tokenize(data), data)
     if detokenize(toks) != data:
         raise SpecError("token round trip failed - not a spec file?")
     return Spec(toks, data)
@@ -1619,6 +1951,39 @@ def set_suspension_tyre(rec: bytes, front: float | None = None,
         struct.pack_into("<f", b, 4 + 4 * SUSP_TYRE_FRONT, float(front))
     if rear is not None:
         struct.pack_into("<f", b, 4 + 4 * SUSP_TYRE_REAR, float(rear))
+    return bytes(b)
+
+
+#: Index of the front/rear suspension **travel** in a suspension record's
+#: floats, in metres.  Measured over all 541 cars: 0.003 .. 0.150 for anything
+#: sane, median 0.039 front and 0.041 rear.  There is no min/max pair anywhere
+#: in the shipped tables - the engine derives the adjustable range from these
+#: two numbers and the geometry in the appearance block, so writing them is the
+#: only way to change how far a car can sit.  See
+#: ``docs/避震行程-调节范围.md``.
+SUSP_TRAVEL_FRONT = 23
+SUSP_TRAVEL_REAR = 24
+
+#: What the shipped cars use, as a guard rail rather than a limit: the highest
+#: sane value is the 1966 Cobra's 0.150, and one car (the Essenza SCV12) carries
+#: 0.632, which is 63 cm of travel and has to be a data error.
+SUSP_TRAVEL_SANE = (0.0, 0.20)
+
+
+def suspension_travel(rec: bytes) -> tuple[float, float]:
+    """Front and rear suspension travel in metres, straight from the table."""
+    return (struct.unpack_from("<f", rec, 4 + 4 * SUSP_TRAVEL_FRONT)[0],
+            struct.unpack_from("<f", rec, 4 + 4 * SUSP_TRAVEL_REAR)[0])
+
+
+def set_suspension_travel(rec: bytes, front: float | None = None,
+                          rear: float | None = None) -> bytes:
+    """Write the front and/or rear travel, leaving every other float alone."""
+    b = bytearray(rec)
+    if front is not None:
+        struct.pack_into("<f", b, 4 + 4 * SUSP_TRAVEL_FRONT, float(front))
+    if rear is not None:
+        struct.pack_into("<f", b, 4 + 4 * SUSP_TRAVEL_REAR, float(rear))
     return bytes(b)
 
 

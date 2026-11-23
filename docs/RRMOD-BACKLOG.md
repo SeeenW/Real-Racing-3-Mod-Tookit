@@ -461,10 +461,16 @@ recorded so they are not re-litigated from scratch.
       1200 → 1218 (group 83).
 - [ ] **[ui]** The animation page can swap track numbers but nothing on screen
       has been checked after a swap - only the bytes were.
-- [ ] **[hold]** Suspension travel range. `custom.suspension.nct` turned out to
-      be an unlock record, not a range; suspension float 24 is the candidate
-      (90 distinct values, median 0.092 m) but float 25 is zero on all 540 cars,
-      which does not fit "front and rear". Waiting on a known-car comparison.
+- [ ] **[hold]** Suspension travel range. Researched on 2026-11-23 and written
+      up in `docs/避震行程-调节范围.md`: there is **no min/max pair** in any
+      table. `custom.suspension.nct` is a one-item unlock (`FullAdjustSuspension`),
+      `suspensiondata` floats 23/24 are the front/rear travel in metres (Silvia
+      0.010/0.015, LFA 0.032/0.031, Cobra 0.150/0.150), and floats 25-31 are zero
+      on all 541 cars - so the earlier "float 24 is the range, float 25 is the
+      rear" guess is dead. The visible limit also comes from the 266 byte
+      appearance block, proven by the Reventón -> Chiron swap shrinking the
+      adjustable range. Still open: an in-game A/B (Silvia at 0.032/0.031, then
+      at 0.150/0.150) to see whether the numbers move the body on screen.
 - [x] **[feat]** Texture import/export. `rrmod/textures.py` plus the Textures
       tab's two buttons: **Save this page as a PNG** decodes whichever copy is on
       disk, **Put a picture in this page** encodes it back. New on the writer

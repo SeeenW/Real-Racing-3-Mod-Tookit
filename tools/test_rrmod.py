@@ -7177,6 +7177,39 @@ def main() -> int:
     check("the page this program added can be taken back out",
           len(removed["files"]) == 1, str(removed.get("files")))
 
+    print("87 a suspension record carries the travel pair")
+    # floats 23/24 of the 140 byte record are the front/rear travel in metres.
+    # They are the only thing in the shipped tables that says how far a car's
+    # suspension moves - there is no min/max pair anywhere - so writing them is
+    # how a car is made to sit differently.  See docs/避震行程-调节范围.md.
+    table = speclib.load_suspension(mini_depot)
+    rid = table.ids()[0]
+    rec = table.get(rid)
+    front, rear = speclib.suspension_travel(rec)
+    check("the pair reads back as two floats",
+          isinstance(front, float) and isinstance(rear, float),
+          f"{front} {rear}")
+
+    written = speclib.set_suspension_travel(rec, front=0.032, rear=0.031)
+    got = speclib.suspension_travel(written)
+    check("the front and rear land in floats 23 and 24",
+          abs(got[0] - 0.032) < 1e-6 and abs(got[1] - 0.031) < 1e-6, str(got))
+    diff = [i for i, (a, b) in enumerate(zip(rec, written)) if a != b]
+    check("nothing outside those two floats moves",
+          diff and all(4 + 4 * 23 <= i < 4 + 4 * 25 for i in diff), str(diff))
+    check("the tyre diameters are left alone",
+          speclib.suspension_tyre_diameter(written) ==
+          speclib.suspension_tyre_diameter(rec),
+          str(speclib.suspension_tyre_diameter(written)))
+    only_front = speclib.set_suspension_travel(rec, front=0.05)
+    check("either end can be written on its own",
+          abs(speclib.suspension_travel(only_front)[1] - rear) < 1e-9,
+          str(speclib.suspension_travel(only_front)))
+    check("the sane range brackets what the shipped cars use",
+          speclib.SUSP_TRAVEL_SANE[0] <= 0.003
+          and speclib.SUSP_TRAVEL_SANE[1] >= 0.150,
+          str(speclib.SUSP_TRAVEL_SANE))
+
     print()
     print(f"{_ok} passed, {len(_bad)} failed")
     for b in _bad:

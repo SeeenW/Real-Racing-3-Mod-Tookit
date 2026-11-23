@@ -1954,6 +1954,39 @@ def set_suspension_tyre(rec: bytes, front: float | None = None,
     return bytes(b)
 
 
+#: Index of the front/rear suspension **travel** in a suspension record's
+#: floats, in metres.  Measured over all 541 cars: 0.003 .. 0.150 for anything
+#: sane, median 0.039 front and 0.041 rear.  There is no min/max pair anywhere
+#: in the shipped tables - the engine derives the adjustable range from these
+#: two numbers and the geometry in the appearance block, so writing them is the
+#: only way to change how far a car can sit.  See
+#: ``docs/避震行程-调节范围.md``.
+SUSP_TRAVEL_FRONT = 23
+SUSP_TRAVEL_REAR = 24
+
+#: What the shipped cars use, as a guard rail rather than a limit: the highest
+#: sane value is the 1966 Cobra's 0.150, and one car (the Essenza SCV12) carries
+#: 0.632, which is 63 cm of travel and has to be a data error.
+SUSP_TRAVEL_SANE = (0.0, 0.20)
+
+
+def suspension_travel(rec: bytes) -> tuple[float, float]:
+    """Front and rear suspension travel in metres, straight from the table."""
+    return (struct.unpack_from("<f", rec, 4 + 4 * SUSP_TRAVEL_FRONT)[0],
+            struct.unpack_from("<f", rec, 4 + 4 * SUSP_TRAVEL_REAR)[0])
+
+
+def set_suspension_travel(rec: bytes, front: float | None = None,
+                          rear: float | None = None) -> bytes:
+    """Write the front and/or rear travel, leaving every other float alone."""
+    b = bytearray(rec)
+    if front is not None:
+        struct.pack_into("<f", b, 4 + 4 * SUSP_TRAVEL_FRONT, float(front))
+    if rear is not None:
+        struct.pack_into("<f", b, 4 + 4 * SUSP_TRAVEL_REAR, float(rear))
+    return bytes(b)
+
+
 # ------------------------------------------------------------------ selftest
 def selftest(depot: str | None = None) -> int:
     depot = depot or os.environ.get("RR3_DEPOT", "")

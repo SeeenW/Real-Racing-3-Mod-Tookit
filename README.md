@@ -1,5 +1,19 @@
 # Real Racing 3 资源解析 / Blender 导入导出工具
 
+> **English** — A toolkit for the Real Racing 3 asset format. Readers and
+> writers for `.m3g` models, `.points` anchors, `.banim` animations and the six
+> shared `.nct` tables; a Blender add-on (19 operators, `N` panel) that imports
+> and exports a whole car; and a desktop manager that builds a car into a
+> playable installation and deploys it over adb. Written against Build 260716,
+> Python 3.12 + PySide6, Blender 4.5.
+>
+> **No game data is included** — you need your own installation. Not affiliated
+> with the game's publisher; see [NOTICE.md](NOTICE.md). MIT licensed.
+>
+> Download the packaged builds from the
+> [releases page](https://github.com/SeeenW/Real-Racing-3-Mod-Tookit/releases).
+> 中文说明从这里往下看。
+
 针对 Build 260716 数据包（`E:\DXT_480x320+960x640+2048x1536数据包-Build260716\files\.depot`）编写。
 可读可写：解析 `.m3g` / `.points` / `.banim` / `.nct` 六张共享表，也能反向写出模型、锚点、动画片段，
 并一次性造出一台能装进游戏的整车（spec + 四张共享表 + 涂装表 + 车目录 + 资源清单）。
