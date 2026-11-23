@@ -26,8 +26,8 @@ from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QColorDialog,
                                QComboBox, QDialog, QDialogButtonBox,
                                QDoubleSpinBox, QFileDialog, QFormLayout,
-                               QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-                               QMessageBox, QPushButton, QRadioButton,
+                               QGridLayout, QHBoxLayout, QHeaderView, QLabel,
+                               QLineEdit, QMessageBox, QPushButton, QRadioButton,
                                QScrollArea, QSpinBox, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -39,7 +39,9 @@ from .. import series as serieslib
 from .. import slots as slotlib
 from .. import stats as statlib
 from .. import texslots as texlib
+from rr3lib import appearance as appearlib
 from rr3lib import livery as liverylib
+from rr3lib import spec as speclib
 from rr3lib import wheelsize as wheelsizelib
 from . import settings as settingslib
 from . import paintui
@@ -452,8 +454,65 @@ class BuildDialog(QDialog):
         #: (tyre radius, rim radius, bore) of the folder's shared model
         self._mesh_measure: tuple | None = None
 
+        # ---- the ride height ------------------------------------------
+        inner.addWidget(W.heading("4. Its ride height", 2))
+        self.ride_note = W.muted(
+            "How far the game will let this car be raised and lowered, in "
+            "millimetres. Both halves are filled in from the donor. They are "
+            "two unrelated fields - the up half is a travel figure, the down "
+            "half is worked out from the tyre - so this runs after the wheel "
+            "scale above and writes the tyre diameter to make the down half "
+            "come out where you asked.")
+        self.ride_note.setWordWrap(True)
+        inner.addWidget(self.ride_note)
+
+        ride_grid = QGridLayout()
+        ride_grid.setContentsMargins(18, 4, 0, 0)
+        ride_grid.setHorizontalSpacing(8)
+        ride_grid.setVerticalSpacing(6)
+        ride_grid.addWidget(W.muted(""), 0, 0)
+        ride_grid.addWidget(W.muted("front"), 0, 1)
+        ride_grid.addWidget(W.muted("rear"), 0, 2)
+
+        def ride_box(tip: str) -> QDoubleSpinBox:
+            b = QDoubleSpinBox()
+            b.setRange(0.0, 700.0)
+            b.setDecimals(0)
+            b.setSingleStep(1.0)
+            b.setSuffix(" mm")
+            b.setMinimumWidth(96)
+            b.setToolTip(tip)
+            b.valueChanged.connect(self._ride_changed)
+            return b
+
+        ride_grid.addWidget(QLabel("Up"), 1, 0)
+        self.ride_up_front = ride_box(
+            "How far the front can be raised above stock. Stored as "
+            "suspensiondata float 23 for the new car.")
+        ride_grid.addWidget(self.ride_up_front, 1, 1)
+        self.ride_up_rear = ride_box("The same for float 24.")
+        ride_grid.addWidget(self.ride_up_rear, 1, 2)
+
+        ride_grid.addWidget(QLabel("Down"), 2, 0)
+        self.ride_down_front = ride_box(
+            "How far the front can be lowered. Nothing stores this: the engine "
+            "computes tyre diameter minus twice the loaded radius, so the "
+            "diameter is solved from the wheel scale above.")
+        ride_grid.addWidget(self.ride_down_front, 2, 1)
+        self.ride_down_rear = ride_box("The same, from the rear tyre.")
+        ride_grid.addWidget(self.ride_down_rear, 2, 2)
+
+        ride_grid.setColumnStretch(3, 1)
+        inner.addLayout(ride_grid)
+
+        self.ride_info = W.muted("")
+        self.ride_info.setWordWrap(True)
+        inner.addWidget(self.ride_info)
+        #: the source car's (record, loaded radius) as the boxes were filled
+        self._ride_source: tuple = (None, None)
+
         # ---- the numbers ---------------------------------------------
-        inner.addWidget(W.heading("4. What it drives like", 2))
+        inner.addWidget(W.heading("5. What it drives like", 2))
         self.tune_box = QCheckBox("Also change what it drives like")
         self.tune_box.setToolTip(
             "A new car gets its own figures whether or not you tick this. When "
@@ -566,7 +625,7 @@ class BuildDialog(QDialog):
         inner.addLayout(tail_form)
 
         # ---- the paints ----------------------------------------------
-        inner.addWidget(W.heading("4. Which paints it comes with", 2))
+        inner.addWidget(W.heading("6. Which paints it comes with", 2))
         self.paints_note = W.muted(
             "A new car starts with every paint scheme the donor has. Untick the "
             "ones it should not come with; the order is the order the game shows "
@@ -631,7 +690,7 @@ class BuildDialog(QDialog):
         inner.addWidget(self.finish_note)
 
         # ---- the aero clips ------------------------------------------
-        inner.addWidget(W.heading("5. When the wing moves", 2))
+        inner.addWidget(W.heading("7. When the wing moves", 2))
         self.clips_note = W.muted(
             "The game looks clips up by name and plays a frame range of the "
             "animation. A car with an active wing needs at least wing_initial; "
@@ -694,7 +753,7 @@ class BuildDialog(QDialog):
         inner.addWidget(self.driver_note)
 
         # ---- 6. a place in the career --------------------------------
-        inner.addWidget(W.heading("6. Where it races", 2))
+        inner.addWidget(W.heading("8. Where it races", 2))
         self.series_note = W.muted(
             "A new car with no series is a car the game cannot offer you: it "
             "sits in the showroom and nothing runs it. Tick the box to have one "
@@ -769,6 +828,10 @@ class BuildDialog(QDialog):
         # in the modify branch the car itself is the source of the figures and
         # the clips, so both have to follow it
         self.car.currentTextChanged.connect(self._fill_stats)
+        # the ride-height boxes are filled from the same car the figures come
+        # from - the donor when cloning, the car itself when modifying
+        self.donor.currentTextChanged.connect(self._fill_ride_height)
+        self.car.currentTextChanged.connect(self._fill_ride_height)
         self.car.currentTextChanged.connect(self._fill_clips)
         self.car.currentTextChanged.connect(self._fill_identity)
         # the paint table follows whichever car it is about, and the queues it
@@ -2523,6 +2586,142 @@ class BuildDialog(QDialog):
         which = "front" if front else "rear"
         return f"its {which} wheels {2 * (front or rear):.3f} m across"
 
+    # ---- the ride height ----------------------------------------------
+    def _fill_ride_height(self) -> None:
+        """Show the source car's range, which is what an untouched build keeps."""
+        source = self._stat_source()
+        rec = loaded = None
+        if source:
+            try:
+                entry = next((e for e in self.inv.cars if e.name == source), None)
+                if entry is not None:
+                    depot = self.inv.depot
+                    rec = speclib.load_suspension(depot).get(entry.car_id)
+                    _count, recs = appearlib.load(depot)
+                    for r in recs:
+                        if r.name.decode("ascii", "replace") == source:
+                            loaded = r.tyre_radius()
+                            break
+            except Exception:                     # noqa: BLE001
+                rec = loaded = None
+        self._ride_source = (rec, loaded)
+        if rec is None:
+            for b in (self.ride_up_front, self.ride_up_rear,
+                      self.ride_down_front, self.ride_down_rear):
+                b.setValue(0.0)
+            self.ride_info.setText("No car selected, so there is no range to "
+                                   "start from.")
+            return
+        up = speclib.suspension_travel(rec)
+        self.ride_up_front.setValue(round(up[0] * 1000.0))
+        self.ride_up_rear.setValue(round(up[1] * 1000.0))
+        if loaded is not None:
+            down = speclib.suspension_down_travel(rec, loaded[0], loaded[1])
+            self.ride_down_front.setValue(speclib.display_mm(down[0]))
+            self.ride_down_rear.setValue(speclib.display_mm(down[1]))
+            self.ride_down_front.setEnabled(True)
+            self.ride_down_rear.setEnabled(True)
+        else:
+            self.ride_down_front.setValue(0.0)
+            self.ride_down_rear.setValue(0.0)
+            self.ride_down_front.setEnabled(False)
+            self.ride_down_rear.setEnabled(False)
+        self._ride_changed()
+
+    def _ride_changed(self) -> None:
+        """Say what the tyre will end up as, before anything is written."""
+        rec, loaded = self._ride_source
+        if rec is None:
+            self.ride_info.setText("")
+            return
+        up = speclib.suspension_travel(rec)
+        stored_up = (round(up[0] * 1000.0), round(up[1] * 1000.0))
+        stored_down = (0, 0)
+        if loaded is not None:
+            down = speclib.suspension_down_travel(rec, loaded[0], loaded[1])
+            stored_down = (speclib.display_mm(down[0]),
+                           speclib.display_mm(down[1]))
+        now = (self.ride_up_front.value(), self.ride_up_rear.value(),
+               self.ride_down_front.value(), self.ride_down_rear.value())
+        if now == stored_up + stored_down:
+            self.ride_info.setText(
+                f"Unchanged from the source car: up {stored_up[0]}/"
+                f"{stored_up[1]} mm, down {stored_down[0]}/{stored_down[1]} mm.")
+            return
+        # The down half is what forces the tyre to move, so show where it lands.
+        radius = self._tyre_radius_for_build()
+        if radius is None:
+            self.ride_info.setText(
+                "Change either half and the tyre diameter is solved so the "
+                "slider reads the number you typed.")
+            return
+        dia = (speclib.diameter_for_down(radius[0], self.ride_down_front.value()
+                                         / 1000.0),
+               speclib.diameter_for_down(radius[1], self.ride_down_rear.value()
+                                         / 1000.0))
+        self.ride_info.setText(
+            f"The tyre becomes {dia[0]:.4f} / {dia[1]:.4f} m across "
+            f"(from {2 * radius[0]:.4f} / {2 * radius[1]:.4f} m of wheel) so the "
+            f"slider reads down {self.ride_down_front.value():.0f}/"
+            f"{self.ride_down_rear.value():.0f} mm.")
+
+    def _tyre_radius_for_build(self) -> tuple | None:
+        """The loaded radius the new car will have, after the wheel scale.
+
+        Falls back to the source car's own record when the pack brings no wheel
+        mesh, because that is what the appearance record will still say.
+        """
+        _rec, loaded = self._ride_source
+        if self._mesh_measure:
+            tyre = self._mesh_measure[0]
+            out = []
+            for box in (self.wheel_front, self.wheel_rear):
+                scale = box.value()
+                if scale > 0:
+                    out.append(wheelsizelib.record_values(tyre, 0.0, scale)[0])
+                else:
+                    out.append(None)
+            if all(v is not None for v in out):
+                return tuple(out)
+        return loaded
+
+    def _ride_dirty(self) -> bool:
+        """True when the boxes say something the source car does not.
+
+        An untouched build must not count as "something to do" - the boxes are
+        filled in from the donor, so they are never empty.
+        """
+        rec, loaded = self._ride_source
+        if rec is None:
+            return False
+        up = speclib.suspension_travel(rec)
+        stored = [round(up[0] * 1000.0), round(up[1] * 1000.0)]
+        if loaded is not None:
+            down = speclib.suspension_down_travel(rec, loaded[0], loaded[1])
+            stored += [speclib.display_mm(down[0]), speclib.display_mm(down[1])]
+        else:
+            stored += [0, 0]
+        now = [self.ride_up_front.value(), self.ride_up_rear.value(),
+               self.ride_down_front.value(), self.ride_down_rear.value()]
+        return any(abs(a - b) >= 0.5 for a, b in zip(now, stored))
+
+    def ride_height(self) -> dict | None:
+        """The four numbers the build should write, or None when it should not.
+
+        ``None`` means the source car had no suspension row at all; otherwise the
+        values are always passed through, and the writer turns an unchanged set
+        into a no-op by itself.
+        """
+        rec, _loaded = self._ride_source
+        if rec is None:
+            return None
+        return {
+            "up_front": self.ride_up_front.value(),
+            "up_rear": self.ride_up_rear.value(),
+            "down_front": self.ride_down_front.value(),
+            "down_rear": self.ride_down_rear.value(),
+        }
+
     # ---- branch -------------------------------------------------------
     def _branch_changed(self) -> None:
         new = self.branch_new.isChecked()
@@ -2569,6 +2768,7 @@ class BuildDialog(QDialog):
         self._fill_stats()
         self._fill_paints()
         self._fill_textures()
+        self._fill_ride_height()
         self._update_plan()
 
     def identity_changes(self) -> dict:
@@ -2810,6 +3010,7 @@ class BuildDialog(QDialog):
             or self.sound_family()
             or self.route_key()
             or self.wheel_sizes()
+            or self._ride_dirty()
             or self._aero_mode()
             or pose.get("after") != pose.get("before"))
 
@@ -2848,6 +3049,7 @@ class BuildDialog(QDialog):
             "tail": self.tail_changes(),
             "series": self.series_placement(),
             "wheel_sizes": self.wheel_sizes(),
+            "ride_height": self.ride_height(),
             # The modify branch's own work: renaming what is already installed,
             # and changing which schemes it has.  Both are empty for a new car -
             # a new car is named by its folder and starts from the donor.

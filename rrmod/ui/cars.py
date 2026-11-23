@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
 from .. import depot as depotlib
 from .. import edit as editlib
 from .. import share as sharelib
-from . import animui, materialui, paintui, texpane
+from . import animui, materialui, paintui, suspui, texpane
 from . import settings as settingslib
 from . import thumbcache
 from . import widgets as W
@@ -35,6 +35,13 @@ COLUMNS = ("Car", "Id", "Class", "LODs", "Paints", "Size")
 #: starting width of each column, in the order of COLUMNS.  The user can drag
 #: them afterwards; these only decide what the first window looks like.
 WIDTHS = (330, 50, 55, 110, 55, 80)
+
+
+def _mm_pair(pair) -> str:
+    """``(0.010, 0.015)`` -> ``"10 / 15 mm"``; the game shows these in millimetres."""
+    if not pair:
+        return ""
+    return f"{pair[0] * 1000:.0f} / {pair[1] * 1000:.0f} mm"
 
 
 def _number_item(value: int) -> QTableWidgetItem:
@@ -276,6 +283,18 @@ class DetailPane(QWidget):
         v.setContentsMargins(0, 4, 0, 0)
         v.addWidget(self.anim)
         self.tabs.addTab(wrap, "Animation")
+
+        # Ride height sits beside the animation tab rather than in the Build
+        # dialog: the up half is a per-car number in a shared table, and this is
+        # the only page that already knows which car is selected.
+        self.ride = suspui.SuspensionPane()
+        self.ride.changed.connect(self.changed)
+        self.ride.status.connect(self.status)
+        wrap = QWidget()
+        v = QVBoxLayout(wrap)
+        v.setContentsMargins(0, 4, 0, 0)
+        v.addWidget(self.ride)
+        self.tabs.addTab(wrap, "Ride height")
         lay.addWidget(self.tabs, 1)
 
     changed = Signal()
@@ -298,6 +317,7 @@ class DetailPane(QWidget):
             self.textures.load(self.editor, "")
             self.parts.load(self.editor, "")
             self.anim.load("", "")
+            self.ride.load("", "")
             return
         self.title.setText(entry.label)
         self._show_picture(inv, entry)
@@ -332,6 +352,8 @@ class DetailPane(QWidget):
             "Livery textures": entry.livery_textures,
             "Tyre diameter": detail.get("tyre_diameter"),
             "Tyre radius": detail.get("tyre_radius"),
+            "Ride height up": _mm_pair(detail.get("suspension_travel")),
+            "Ride height down": _mm_pair(detail.get("suspension_down")),
             "Wheel sizes": detail.get("wheel_sizes"),
             "Paint colour": detail.get("paint"),
             "Material overrides": detail.get("material_overrides"),
@@ -353,6 +375,7 @@ class DetailPane(QWidget):
         self.textures.load(self.editor, entry.name)
         self.parts.load(self.editor, entry.name)
         self.anim.load(inv.root if inv else "", entry.name)
+        self.ride.load(inv.root if inv else "", entry.name, entry.car_id)
 
     def _show_picture(self, inv, entry) -> None:
         """Put the game's own picture of this car beside its name."""

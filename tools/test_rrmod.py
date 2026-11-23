@@ -7210,6 +7210,159 @@ def main() -> int:
           and speclib.SUSP_TRAVEL_SANE[1] >= 0.150,
           str(speclib.SUSP_TRAVEL_SANE))
 
+    print("88 the rest of the record is u32, not float")
+    # Reading a record as <34f made 10..20 and 25..31 look like zeros: they are
+    # small u32 percentages that decode as denormals.  If anyone ever "fixes"
+    # SUSP_INT_FIELDS by widening it to every index, the tyre and travel floats
+    # would be read as integers and this group would catch it.
+    vals = [speclib.suspension_percent(rec, i) for i in speclib.SUSP_INT_FIELDS]
+    check("every percentage field reads back as a small integer",
+          all(isinstance(v, int) and 0 <= v <= 100 for v in vals), str(vals))
+    check("the percentage fields and the float fields do not overlap",
+          not (set(speclib.SUSP_INT_FIELDS)
+               & {speclib.SUSP_TYRE_FRONT, speclib.SUSP_TYRE_REAR,
+                  speclib.SUSP_TRAVEL_FRONT, speclib.SUSP_TRAVEL_REAR}),
+          str(speclib.SUSP_INT_FIELDS))
+    try:
+        speclib.suspension_percent(rec, speclib.SUSP_TRAVEL_FRONT)
+        raised = False
+    except ValueError:
+        raised = True
+    check("asking for a float index as a percentage is refused", raised)
+    check("a real float index still reads as a float",
+          isinstance(speclib.suspension_travel(rec)[0], float),
+          str(speclib.suspension_travel(rec)))
+
+    print("89 the downward ride-height limit is diameter minus twice the load radius")
+    # Not stored anywhere: the engine derives it from the tyre.  Two on-screen
+    # proofs, both riding on the UI's float truncation - see
+    # docs/避震行程-调节范围.md.
+    dia = speclib.suspension_tyre_diameter(rec)
+    down = speclib.suspension_down_travel(rec, dia[0] / 2 - 0.005, dia[1] / 2 - 0.005)
+    check("half a centimetre of static deflection each end gives 10 and 10 mm",
+          abs(down[0] - 0.010) < 1e-6 and abs(down[1] - 0.010) < 1e-6, str(down))
+    flat = speclib.suspension_down_travel(rec, dia[0] / 2, dia[1] / 2)
+    check("a tyre that does not squash gets no downward travel at all",
+          abs(flat[0]) < 1e-6 and abs(flat[1]) < 1e-6, str(flat))
+    # the Silvia's real numbers: 0.634 - 2*0.312 and 0.639 - 2*0.312
+    sil = speclib.set_suspension_travel(
+        speclib.set_suspension_tyre(rec, 0.634, 0.639), 0.010, 0.015)
+    silvia = speclib.suspension_down_travel(sil, 0.31200000643730164,
+                                            0.31200000643730164)
+    check("the Silvia lands on the 9 and 14 the game shows, float truncation and all",
+          int(silvia[0] * 1000) == 9 and int(silvia[1] * 1000) == 14, str(silvia))
+    check("and the raw value is a hair under the round number, not a millimetre short",
+          silvia[0] < 0.010 and silvia[0] > 0.00999, repr(silvia[0]))
+
+    print("90 the ride height tab writes the up half and leaves the down half alone")
+    # The slider's up half is suspensiondata f23/f24 for the car's id.  Its down
+    # half is not stored at all - the engine computes diameter - 2*loaded radius
+    # - so this edit must not move it.  See docs/避震行程-调节范围.md.
+    sus_table = speclib.load_suspension(mini_depot)
+    sus_rec = sus_table.get(CAR_ID)
+    up_before = speclib.suspension_travel(sus_rec)
+    _, apps = appearlib.load(mini_depot)
+    app = [r for r in apps if r.name.decode() == CAR]
+    check("the fixture car has an appearance record to take a radius from",
+          bool(app), CAR)
+    down_before = speclib.suspension_down_travel(sus_rec, *app[0].tyre_radius())
+
+    problems_before = editlib.verify(MINI)
+    made = editlib.set_suspension_travel(
+        MINI, CAR, front_mm=up_before[0] * 1000 + 20, rear_mm=up_before[1] * 1000 + 20)
+    want_up = (round(up_before[0] * 1000) + 20, round(up_before[1] * 1000) + 20)
+    check("the edit reports the range before and after",
+          made["changed"] and made["before"][:2] == (round(up_before[0] * 1000),
+                                                     round(up_before[1] * 1000)),
+          str(made["before"]))
+    check("twenty millimetres more travel on each end",
+          made["after"][:2] == want_up, str(made["after"]))
+    on_disk = speclib.suspension_range_mm(
+        speclib.load_suspension(mini_depot).get(CAR_ID), app[0].tyre_radius())
+    check("it is on disk, not just in the return value",
+          on_disk[:2] == want_up, str(on_disk))
+    synced = made.get("synced") or {}
+    check("the registry and the vehicle data list learned the new hash",
+          synced.get("registry") is True and synced.get("data_list") == "updated",
+          str(synced))
+    check("the edit did not leave the manifests worse than it found them",
+          len(editlib.verify(MINI)) <= len(problems_before),
+          str(editlib.verify(MINI)[:2]))
+    down_after = speclib.suspension_down_travel(
+        speclib.load_suspension(mini_depot).get(CAR_ID), *app[0].tyre_radius())
+    check("the down half did not move - it does not read this field",
+          down_after == down_before, f"{down_before} -> {down_after}")
+
+    again = editlib.set_suspension_travel(
+        MINI, CAR, front_mm=want_up[0], rear_mm=want_up[1])
+    check("writing the same number again changes nothing",
+          not again["changed"], str(again))
+
+    editlib.set_suspension_travel(
+        MINI, CAR, front_mm=up_before[0] * 1000, rear_mm=up_before[1] * 1000)
+    check("the fixture car is back where it started",
+          speclib.suspension_travel(speclib.load_suspension(mini_depot).get(CAR_ID))
+          == up_before)
+    try:
+        editlib.set_suspension_travel(MINI, "no_such_car", front_mm=10)
+        refused = False
+    except editlib.EditError:
+        refused = True
+    check("a car that is not installed is refused", refused)
+
+    print("91 the ride-height range is written as the numbers it should read")
+    # Up is suspensiondata f23/f24; down is not stored at all - the engine
+    # computes diameter - 2*loaded radius - so writing a down range solves for
+    # the diameter.  Both are millimetres, because that is what the game prints.
+    # See docs/避震行程-调节范围.md.
+    sus_path = os.path.join(mini_depot, *speclib.SUSPENSION.split("/"))
+    orig_rec = speclib.load_suspension(mini_depot).get(CAR_ID)
+    loaded = app[0].tyre_radius()
+    stock = speclib.suspension_range_mm(orig_rec, loaded)
+
+    made = editlib.set_suspension_range(MINI, CAR, up_mm=(40, 35),
+                                        down_mm=(25, 30))
+    check("the edit reports the four numbers it aimed for",
+          made["changed"] and made["after"] == (40, 35, 25, 30), str(made))
+    on_disk = speclib.load_suspension(mini_depot).get(CAR_ID)
+    check("and the table really reads that way",
+          speclib.suspension_range_mm(on_disk, loaded) == (40, 35, 25, 30),
+          str(speclib.suspension_range_mm(on_disk, loaded)))
+    _, apps_now = appearlib.load(mini_depot)
+    now_app = [r for r in apps_now if r.name.decode() == CAR][0]
+    check("the drawn wheel is left alone - only the tyre figure moves",
+          now_app.tyre_radius() == loaded, str(now_app.tyre_radius()))
+    again = editlib.set_suspension_range(MINI, CAR, up_mm=(40, 35),
+                                        down_mm=(25, 30))
+    check("writing the same range again changes nothing",
+          not again["changed"], str(again))
+    editlib.set_suspension_range(MINI, CAR, down_mm=(10, 12))
+    check("a down-only edit leaves the up half where it was",
+          speclib.suspension_range_mm(
+              speclib.load_suspension(mini_depot).get(CAR_ID), loaded)[:2]
+          == (40, 35), str(speclib.suspension_range_mm(
+              speclib.load_suspension(mini_depot).get(CAR_ID), loaded)))
+    check("a tyre with no room to squash gives no down travel",
+          abs(speclib.diameter_for_down(loaded[0], 0.0) - 2 * loaded[0]) < 1e-6,
+          repr(speclib.diameter_for_down(loaded[0], 0.0)))
+    check("the solver lands on the millimetre, not one under it",
+          speclib.display_mm(speclib.diameter_for_down(loaded[0], 0.025)
+                             - 2 * loaded[0]) == 25,
+          repr(speclib.diameter_for_down(loaded[0], 0.025)))
+    check("the shipped range reads back as what the screen shows",
+          stock[0] >= stock[2] and stock[1] >= stock[3], str(stock))
+
+    # Put the original record back byte for byte rather than through the
+    # millimetre API: the down half rounds when read, so asking for "31" would
+    # write a tyre a millimetre smaller than the one the fixture started with.
+    table = speclib.load_suspension(mini_depot)
+    table.records[table.ids().index(CAR_ID)] = orig_rec
+    nctlib.write(sus_path, table.to_bytes())
+    editlib.sync_file(MINI, name=CAR, rel_path="/" + speclib.SUSPENSION,
+                      local=sus_path)
+    check("the fixture car is back to its own record",
+          speclib.load_suspension(mini_depot).get(CAR_ID) == orig_rec)
+
     print()
     print(f"{_ok} passed, {len(_bad)} failed")
     for b in _bad:

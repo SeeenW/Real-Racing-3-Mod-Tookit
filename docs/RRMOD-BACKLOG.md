@@ -35,6 +35,26 @@ aero on/off. Missing at least: car id, appearance id, model token, paint /
 livery choice, PR + stats, class and tier, and the series placement that
 `rrmod/series.py` already supports.
 
+- [x] **[feat]** Ride height tab in the car detail pane. **DONE 2026-11-23** -
+      `rrmod/ui/suspui.py` + `edit.set_suspension_range()`: both halves of the
+      slider are editable in millimetres, and writing a down range solves for
+      the tyre diameter (`spec.diameter_for_down`). Group 90 tests the up half
+      on its own, group 91 the pair.
+- [x] **[bug]** A build did not keep `f21/f22` in step with the wheel size.
+      **DONE 2026-11-23** - the Build dialog now has `4. Its ride height`,
+      *after* the wheel scale because the down half is measured from the drawn
+      wheel. `app.py` applies `set_suspension_range` on both branches right
+      after the wheels are written. Before this, `build_suspension` cloned the
+      donor's 140 byte record verbatim, so the tyre diameter stayed the donor's
+      while the wheel scale rewrote the loaded radius - measured on the LFA as a
+      donor (f21 = 712, own f1 = 340, down 32 mm), a build at wheel scale 1.0
+      landed at **113 mm** down, x1.2 at 56 mm, x0.9 at 144 mm.
+- [ ] **[bug]** The upper half of the ride-height slider prints one millimetre
+      less than it is stored as, sometimes. Five readings, no single rule fits:
+      0.010 -> +10, 0.015 -> +15, 0.180 -> +180, 0.005 -> +5/+4, 0.025 -> **+24**.
+      The down half is exact. Next step: change only f23/f24, leave the tyre
+      alone, and see whether the diameter is the second variable.
+
 - [x] **[feat]** Finish the field list, then re-review.
       **DONE 2026-11-06 - appearance id, model token and the donor-alias switch are
       in the dialog and reach `install_pack`.**
@@ -465,19 +485,39 @@ recorded so they are not re-litigated from scratch.
       up in `docs/避震行程-调节范围.md`: there is **no min/max pair** in any
       table. `custom.suspension.nct` is a one-item unlock (`FullAdjustSuspension`),
       `suspensiondata` floats 23/24 are the front/rear travel in metres (Silvia
-      0.010/0.015, LFA 0.032/0.031, Cobra 0.150/0.150), and floats 25-31 are zero
-      on all 541 cars - so the earlier "float 24 is the range, float 25 is the
-      rear" guess is dead. The visible limit also comes from the 266 byte
-      appearance block, proven by the Reventón -> Chiron swap shrinking the
-      adjustable range. **Answered on screen 2026-11-23**: Silvia (id 114) at
-      f23/f24 = 0.180/0.180 shows **+180/-9 front, +180/-14 rear** - so the *up*
-      travel is f23/f24 straight (no clamp), the *down* travel does not follow
-      them at all, and the 1 mm gap is float32 truncation (0.010 reads as 9).
-      Model, settled the same day by a third value (0.005/0.005 -> +5/+4 up,
-      -9/-14 down, unchanged): `[-geometry, +travel]`. The down half never looks
-      at this table, so lowering a car means editing the 266 byte appearance
-      block, not writing a smaller travel. Closed - the remaining unknown is
-      which bytes in the block hold the geometry.
+      0.010/0.015, LFA 0.032/0.031, Cobra 0.150/0.150) - so the earlier "float 24
+      is the range, float 25 is the rear" guess is dead. The visible limit also
+      comes from the 266 byte appearance block, proven by the Reventón -> Chiron
+      swap shrinking the adjustable range. **Answered on screen 2026-11-23**:
+      Silvia (id 114) at f23/f24 = 0.180/0.180 shows **+180/-9 front, +180/-14
+      rear** - so the *up* travel is f23/f24 straight (no clamp), the *down*
+      travel does not follow them at all, and the 1 mm gap is float32 truncation
+      (0.010 reads as 9). Model, settled the same day by a third value
+      (0.005/0.005 -> +5/+4 up, -9/-14 down, unchanged): `[-geometry, +travel]`.
+      The down half never looks at this table, so lowering a car means editing
+      the 266 byte appearance block, not writing a smaller travel.
+- [x] **[re]** Which bytes of the appearance block hold the down travel. **Answered
+      2026-11-23**: none of them directly - the engine *derives* it. The downward
+      half of the ride-height slider is
+      `tyre diameter (suspensiondata f21/f22) - 2 * loaded radius (appearance
+      f1/f5)`, i.e. twice the tyre's static deflection, displayed as
+      `int(metres * 1000)`. Two on-screen proofs, both turning on that
+      truncation: the Silvia (0.634 - 2*0.312 = 0.00999999 -> shows -9,
+      0.639 - 2*0.312 = 0.01499999 -> shows -14) and the Essenza SCV12
+      (0.612 - 2*0.306 = 1.1e-8 -> shows 0, 0.672 - 2*0.336 = 9e-9 -> shows 0 -
+      which is why that car cannot be lowered at all while its f23/f24 of
+      0.632/0.634 let it rise 63 cm). The reason this hid for so long: for 280
+      of the 341 cars the appearance loaded radius was authored as
+      `(diameter - travel)/2`, so the formula just reproduces the travel and the
+      difference is invisible. `spec.suspension_down_travel()` now exposes it,
+      group 89 tests it. Also corrected in the same pass: record fields 10..20
+      and 25..31 are **u32 percentages**, not zeros - they only looked like zero
+      because a `<34f` read turns them into denormals; `spec.SUSP_INT_FIELDS` +
+      `suspension_percent()` say so and group 88 tests it. Dead ends kept in the doc: `+46/+50/+54` of the block
+      (260 -> 520 on screen, no change), `.points` wheel heights (model space),
+      cardesc floats, `custom.suspension`'s -100/+40, `consts.stats`.
+      `+46/+50/+54` itself is still unmapped, as is `+62/+66/+70` (7000..10000,
+      tracks the car class).
 - [x] **[feat]** Texture import/export. `rrmod/textures.py` plus the Textures
       tab's two buttons: **Save this page as a PNG** decodes whichever copy is on
       disk, **Put a picture in this page** encodes it back. New on the writer

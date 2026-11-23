@@ -35,6 +35,8 @@ HEADER_SIZE = 128
 DDPF_FOURCC = 0x4
 #: ``DDS_HEADER.dwFlags``: CAPS | HEIGHT | WIDTH | PIXELFORMAT | LINEARSIZE.
 DDS_FLAGS = 0x1 | 0x2 | 0x4 | 0x1000 | 0x80000
+#: ``DDS_HEADER.dwFlags``: DDSD_MIPMAPCOUNT, set only when a chain is written.
+DDS_MIPMAPCOUNT = 0x20000
 
 
 class DdsEncodeError(Exception):
@@ -273,13 +275,18 @@ def encode_blocks(width: int, height: int, channels: int, pixels: bytes, *,
 
 
 def header(width: int, height: int, *, alpha: bool,
-           fourcc: bytes = b"") -> bytes:
+           fourcc: bytes = b"", mipmaps: int = 1) -> bytes:
     """A 128 byte DDS header carrying the DXT1 or DXT5 fourcc.
 
     ``fourcc`` overrides the code in the pixel format block, which is how the
     ETC and ATC encoders in :mod:`rr3lib.blockencode` produce a header for their
     own family.  Those two store eight bytes per block exactly as DXT1 does, so
     the pitch and the flags stay the same and only the four characters change.
+
+    ``mipmaps`` is the number of levels actually written after the header.  The
+    shipped pages carry the full chain (a 512 square page has ten), and the
+    header has to say so twice - ``dwMipMapCount`` and the two capability bits -
+    or a reader that trusts either one sees a texture it cannot sample.
     """
     if width <= 0 or height <= 0:
         raise DdsEncodeError(f"bad dimensions {width}x{height}")
@@ -289,24 +296,82 @@ def header(width: int, height: int, *, alpha: bool,
         raise DdsEncodeError(f"a fourcc is four bytes, not {len(fourcc)}")
     block = 16 if alpha else 8
     pitch = max(1, (width + 3) // 4) * block
+    flags = DDS_FLAGS
+    caps = 0x1000
+    if mipmaps > 1:
+        flags |= DDS_MIPMAPCOUNT
+        caps |= 0x8 | 0x400000        # DDSCAPS_COMPLEX | DDSCAPS_MIPMAP
     return struct.pack(
-        "<4s7I44x", DDS_MAGIC, 124, DDS_FLAGS, height, width, pitch, 0, 1
+        "<4s7I44x", DDS_MAGIC, 124, flags, height, width, pitch, 0, max(1, mipmaps)
     ) + struct.pack(
         "<8I", 32, DDPF_FOURCC, int.from_bytes(fourcc, "little"), 0, 0, 0, 0, 0
-    ) + struct.pack("<5I", 0x1000, 0, 0, 0, 0)
+    ) + struct.pack("<5I", caps, 0, 0, 0, 0)
+
+
+def halve(width: int, height: int, channels: int, pixels: bytes):
+    """``(w, h, pixels)`` at half size, averaging each 2x2 block.
+
+    A box filter is what a mip chain wants and what every DXT mip of the shipped
+    data looks like.  An odd edge reuses the last row/column rather than
+    dropping it, so a non-square page keeps its aspect.
+    """
+    w = max(1, width // 2)
+    h = max(1, height // 2)
+    if _np is not None:
+        arr = _np.frombuffer(pixels, dtype=_np.uint8).reshape(height, width, channels)
+        if height % 2:
+            arr = _np.concatenate([arr, arr[-1:]], axis=0)
+        if width % 2:
+            arr = _np.concatenate([arr, arr[:, -1:]], axis=1)
+        small = (arr[0::2, 0::2].astype(_np.uint16)
+                 + arr[1::2, 0::2] + arr[0::2, 1::2] + arr[1::2, 1::2] + 2) // 4
+        # The padding above adds a row and a column for an odd edge, so the
+        # averaged block is one larger than the answer on that axis - 15 -> 8
+        # rather than 7.  Trimming to (h, w) is what keeps the caller's stride
+        # right; without it a 15x7 page came back as 8 rows of 8 pixels and the
+        # next level's reshape failed.
+        small = small[:h, :w]
+        return w, h, small.astype(_np.uint8).tobytes()
+    out = bytearray(w * h * channels)
+    for y in range(h):
+        y0 = min(2 * y, height - 1)
+        y1 = min(2 * y + 1, height - 1)
+        for x in range(w):
+            x0 = min(2 * x, width - 1)
+            x1 = min(2 * x + 1, width - 1)
+            base = (y * w + x) * channels
+            for c in range(channels):
+                total = (pixels[(y0 * width + x0) * channels + c]
+                         + pixels[(y0 * width + x1) * channels + c]
+                         + pixels[(y1 * width + x0) * channels + c]
+                         + pixels[(y1 * width + x1) * channels + c])
+                out[base + c] = (total + 2) // 4
+    return w, h, bytes(out)
 
 
 def encode(width: int, height: int, channels: int, pixels: bytes, *,
-           alpha: bool | None = None) -> bytes:
+           alpha: bool | None = None, mipmaps: bool = True) -> bytes:
     """A complete DDS file for ``pixels``.
 
     ``alpha`` picks DXT5 over DXT1; left out, a four channel picture gets DXT5
     and a three channel one gets DXT1.
+
+    ``mipmaps`` writes the whole chain down to 1x1, which is what the shipped
+    pages carry.  A single level page still loads, but the GPU then samples a
+    512 square page at full resolution at every distance and the result crawls
+    badly, so the default is on.
     """
     if alpha is None:
         alpha = channels == 4
-    body = encode_blocks(width, height, channels, pixels, alpha=alpha)
-    return header(width, height, alpha=alpha) + body
+    levels = [(width, height, pixels)]
+    if mipmaps:
+        w, h, px = width, height, pixels
+        while w > 1 or h > 1:
+            w, h, px = halve(w, h, channels, px)
+            levels.append((w, h, px))
+    body = b"".join(encode_blocks(w, h, channels, px, alpha=alpha)
+                    for w, h, px in levels)
+    return header(width, height, alpha=alpha, mipmaps=len(levels)) + body
 
 
 def selftest(depot: str, pages=()) -> int:

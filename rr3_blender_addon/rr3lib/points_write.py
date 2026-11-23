@@ -334,18 +334,6 @@ def engine_name(name: str) -> str | None:
     return None
 
 
-#: The spline records the engine reads.  These are *not* in the point table: a
-#: spline is looked up under its own name, and all four of them ship.
-ENGINE_SPLINES = (
-    "SPLINE_SPECULAR", "SPLINE_SPECULAR_REVERSE",
-    "SPLINE_REVERSE", "SPLINE_REVERSE_SPECULAR",
-)
-
-#: ``transform`` records are looked up by prefix - the exhaust index varies
-#: (``TRANSFORM_EXHAUST_01`` .. ``_004``, one car ships ``S04``).
-ENGINE_TRANSFORM_PREFIXES = ("TRANSFORM_EXHAUST", "TRANSFORM_DRAG_RACE_VIEW")
-
-
 def validate(doc: PointsDoc) -> list[str]:
     """Return human readable warnings about a document."""
     out: list[str] = []
@@ -354,20 +342,11 @@ def validate(doc: PointsDoc) -> list[str]:
         if a.name in seen:
             out.append(f"duplicate anchor name {a.name!r} (last one wins in game)")
         seen.add(a.name)
-        if a.kind in ("point", "hinge"):
-            if engine_name(a.name) is None:
-                out.append(
-                    f"{a.name!r} is not one of the 79 engine anchors (nor a "
-                    f"_NN variant of one) - the game will ignore it"
-                )
-        elif a.kind == "spline":
-            if a.name not in ENGINE_SPLINES:
-                out.append(f"{a.name!r} is not one of the 4 spline names - the "
-                           f"game will ignore it")
-        elif a.kind == "transform":
-            if not a.name.startswith(ENGINE_TRANSFORM_PREFIXES):
-                out.append(f"{a.name!r} is not a known transform record - the "
-                           f"game will ignore it")
+        if engine_name(a.name) is None:
+            out.append(
+                f"{a.name!r} is not one of the 79 engine anchors - "
+                f"the game will ignore it"
+            )
         if a.kind == "hinge" and a.orientation is None and a.rotation is None:
             out.append(f"{a.name}: hinge without orientation, using identity")
         if a.kind == "spline" and not a.splines:

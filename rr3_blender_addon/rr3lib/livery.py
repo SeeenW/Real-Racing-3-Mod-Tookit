@@ -55,10 +55,9 @@ from the system.
 
 from __future__ import annotations
 
+import copy
 import glob
 import os
-import copy
-import re
 import struct
 from dataclasses import dataclass, field
 
@@ -318,40 +317,40 @@ class LiveryFile:
                 return p
         return None
 
+    # ---- adding and removing a scheme ----------------------------------
     def next_paint_name(self) -> str:
-        """``07_<car>.livery`` - the next number after the shipped rows.
+        """The next free ``NN_<car>.livery`` name for a new scheme.
 
-        The shipped rows are named ``NN_<car>.livery`` and the number is what
-        the game orders them by, so a new scheme continues the series instead
-        of colliding with one.
+        The frontend orders the paint list by the leading number, so a new row
+        continues the numbering rather than inventing a name - a scheme called
+        ``extra`` would sort after every numbered one and look like a bug in the
+        colour list.  Two digits are enough for the 541 shipped cars; a car with
+        more than 99 schemes keeps counting, just with three.
         """
-        car = self.car.decode("utf-8", "replace") or "car"
-        best = 0
-        for p in self.paints:
-            m = re.match(r"\s*(\d+)", p.name())
-            if m:
-                best = max(best, int(m.group(1)))
-        return f"{best + 1:02d}_{car}.livery"
+        car = self.car.decode("utf-8", "replace")
+        highest = 0
+        for paint in self.paints:
+            head = paint.name().split("_", 1)[0]
+            if head.isdigit():
+                highest = max(highest, int(head))
+        return f"{highest + 1:02d}_{car}.livery"
 
     def clone_paint(self, index: int = 0, *, name: str = "") -> Paint:
-        """Append a copy of one paint scheme and return it.
+        """Copy one scheme, give the copy a name and append it.
 
-        A paint scheme is just a row in this list - the game reads however many
-        rows there are, there is no count field to bump.  The copy keeps the
-        source's atlas, materials and colour, so the new scheme starts out
-        looking exactly like the one it was copied from and can then be changed
-        one field at a time.
+        Everything the scheme carries - colour, finish, materials, its own
+        atlases - comes along, because a new preset that is not a copy of an
+        existing one is a preset the game cannot draw: the body materials and the
+        body atlas are what make a row a picture rather than a blank.
         """
-        if not self.paints:
-            raise LiveryError(
-                "this car lists no paint scheme, so there is nothing to copy - "
-                "pick a donor car that has at least one")
-        src = self.paints[int(index)]
-        p = copy.deepcopy(src)
-        p.file = (name or self.next_paint_name()).encode("utf-8", "replace")
-        p.display = b""
-        self.paints.append(p)
-        return p
+        if not 0 <= int(index) < len(self.paints):
+            raise IndexError(f"paint scheme {index} does not exist "
+                             f"({len(self.paints)} in the table)")
+        paint = copy.deepcopy(self.paints[int(index)])
+        if name:
+            paint.file = name.encode("utf-8")
+        self.paints.append(paint)
+        return paint
 
     # ---- painting ------------------------------------------------------
     def paint_part(self, part: str, material: str, *,

@@ -1062,6 +1062,18 @@ def car_detail(inv: Inventory, entry: CarEntry) -> dict:
         if rec2:
             out["tyre_diameter"] = tuple(
                 round(v, 4) for v in _s.suspension_tyre_diameter(rec2))
+            out["suspension_travel"] = tuple(
+                round(v, 4) for v in _s.suspension_travel(rec2))
+            # The down half is not stored: it is the tyre's static deflection
+            # doubled, so it needs the appearance block's loaded radius as well.
+            if rec is not None:
+                try:
+                    out["suspension_down"] = tuple(
+                        round(v, 6)
+                        for v in _s.suspension_down_travel(rec2,
+                                                           *rec.tyre_radius()))
+                except Exception:                # noqa: BLE001
+                    pass
     except Exception:                            # noqa: BLE001
         pass
     return out

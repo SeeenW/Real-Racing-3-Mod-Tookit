@@ -60,7 +60,7 @@ _ROOT = os.path.dirname(_HERE)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = ["depot", "workspace", "modpack", "slots", "edit", "deploy", "music",
            "series", "gfx", "share", "cars", "stats", "anim", "animcopy",
            "materials", "textures", "matmanager", "paints", "brands",

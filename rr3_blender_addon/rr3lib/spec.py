@@ -1933,9 +1933,26 @@ def load_damage(depot: str) -> FixedTable:
                        header=4, record=116, count_at=0, name="damage")
 
 
+#: The 34 four-byte fields of a suspension record are **not** all floats.
+#: Reading the record as ``<34f`` makes fields ``10..20`` and ``25..31`` look
+#: like zeros, because they are small ``u32`` values (5..100) that decode as
+#: denormals (``8.6881e-44`` and friends).  They are per-axle percentages,
+#: stored front/rear in pairs.  Real floats: ``0 1 2 3 6 7 8 9 21 22 23 24 32
+#: 33``; always zero: ``4 5``.
+SUSP_INT_FIELDS = (10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+                   25, 26, 27, 28, 29, 30, 31)
+
 #: Index of the front/rear tyre **diameter** in a suspension record's floats.
 SUSP_TYRE_FRONT = 21
 SUSP_TYRE_REAR = 22
+
+
+def suspension_percent(rec: bytes, index: int) -> int:
+    """One of the per-axle percentage fields (see :data:`SUSP_INT_FIELDS`)."""
+    if index not in SUSP_INT_FIELDS:
+        raise ValueError(f"{index} is not a u32 field; see SUSP_INT_FIELDS")
+    return struct.unpack_from("<I", rec, 4 + 4 * index)[0]
+
 
 
 def suspension_tyre_diameter(rec: bytes) -> tuple[float, float]:
@@ -1961,15 +1978,15 @@ def set_suspension_tyre(rec: bytes, front: float | None = None,
 #: These two numbers are the *upward* half of the ride-height slider and nothing
 #: else.  Proved on screen on 2026-11-23: the Silvia reads +10/+15 at the shipped
 #: 0.010/0.015, +180/+180 at 0.180/0.180 and +5/+4 at 0.005/0.005, while the
-#: *downward* half stayed at -9/-14 through all three - so the lower limit comes
-#: from the geometry in the appearance block and writing these smaller only
-#: shortens the up side.  See ``docs/避震行程-调节范围.md``.
+#: *downward* half stayed at -9/-14 through all three.  The down half is not
+#: stored - see :func:`suspension_down_travel`.
 SUSP_TRAVEL_FRONT = 23
 SUSP_TRAVEL_REAR = 24
 
 #: What the shipped cars use, as a guard rail rather than a limit: the highest
-#: sane value is the 1966 Cobra's 0.150, and one car (the Essenza SCV12) carries
-#: 0.632, which is 63 cm of travel and has to be a data error.
+#: sane value is the 1966 Cobra's 0.150.  One car, the Essenza SCV12, carries
+#: 0.632 - and that turns out not to be a typo: its down travel is 0, so the
+#: whole slider sits above zero and 63 cm up is what the car actually gets.
 SUSP_TRAVEL_SANE = (0.0, 0.20)
 
 
@@ -1988,6 +2005,109 @@ def set_suspension_travel(rec: bytes, front: float | None = None,
     if rear is not None:
         struct.pack_into("<f", b, 4 + 4 * SUSP_TRAVEL_REAR, float(rear))
     return bytes(b)
+
+
+def suspension_down_travel(rec: bytes, loaded_front: float,
+                           loaded_rear: float) -> tuple[float, float]:
+    """The **downward** half of the ride-height slider, in metres.
+
+    It is not stored as a number anywhere.  The engine derives it from the
+    tyre: ``diameter - 2 * loaded_radius``, i.e. twice the tyre's static
+    deflection.  ``diameter`` is this record's f21/f22, and ``loaded_radius``
+    is f1/f5 of the car's appearance block (``rr3lib.appearance``), which is
+    the squashed radius the wheel is drawn at.
+
+    Proved twice on screen on 2026-11-23, and both proofs turn on the float
+    truncation the UI applies:
+
+    * Silvia (id 114): 0.634 - 2*0.312 = 0.00999999 -> shows **-9**,
+      0.639 - 2*0.312 = 0.01499999 -> shows **-14**.  Editing f23/f24 to 0.180
+      or 0.005 leaves both numbers alone, which is what pointed here.
+    * Essenza SCV12 (id 418): 0.612 - 2*0.306 = 1.1e-8 -> shows **0**, and
+      0.672 - 2*0.336 = 9e-9 -> shows **0**; the car cannot be lowered at all,
+      even though its f23/f24 read 0.632/0.634 and it can rise 63 cm.
+
+    For 280 of the 341 cars the two tables were authored consistently, so this
+    comes out equal to f23/f24 and the difference is invisible - which is why
+    the down half looked like "travel minus one" for a while.
+    """
+    dia = suspension_tyre_diameter(rec)
+    return (dia[0] - 2.0 * float(loaded_front),
+            dia[1] - 2.0 * float(loaded_rear))
+
+
+def as_float32(value: float) -> float:
+    """The value as the table would store it."""
+    return struct.unpack("<f", struct.pack("<f", float(value)))[0]
+
+
+def display_mm(metres: float) -> int:
+    """What the ride-height slider prints for a length in metres.
+
+    The game truncates rather than rounds, which is the whole reason a car
+    whose numbers look like 10 and 15 reads as ``+10 / -9`` and ``+15 / -14``:
+    ``0.015`` is stored as ``0.014999999664`` and ``int(14.999999 * 1000)``
+    is 14.
+    """
+    return int(as_float32(metres) * 1000)
+
+
+def diameter_for_down(loaded: float, down: float) -> float:
+    """The tyre diameter that makes the downward travel show as ``down``.
+
+    ``down`` is in metres and is rounded to whole millimetres first, because
+    that is the resolution the slider has.  The search runs in float32 - the
+    obvious answer ``2 * loaded + down`` is a hair too small once it is stored:
+    ``0.649 - 2*0.312`` is ``0.0249999`` and prints as 24, not 25.
+    """
+    want = int(round(float(down) * 1000.0))
+    two = as_float32(2.0 * as_float32(loaded))
+    if want <= 0:
+        return two
+    v = as_float32(two + want / 1000.0)
+    for _ in range(400):
+        if int(as_float32(as_float32(v) - two) * 1000) >= want:
+            return v
+        v = as_float32(v + 0.000002)
+    return v
+
+
+def suspension_range(rec: bytes, loaded, *,
+                     up=None, down=None) -> bytes:
+    """Write the ride-height range as the user thinks of it.
+
+    ``up`` and ``down`` are ``(front, rear)`` in metres, or ``None`` to leave
+    that half alone.  ``loaded`` is the car's loaded tyre radius, front and rear
+    - appearance record floats 1 and 5 (``appearance.Record.tyre_radius()``),
+    which the down half is measured from.
+
+    The two halves are independent fields, so writing one never disturbs the
+    other: up is f23/f24, down is the tyre diameter f21/f22.
+    """
+    b = rec
+    if up is not None:
+        b = set_suspension_travel(b, front=up[0], rear=up[1])
+    if down is not None:
+        b = set_suspension_tyre(
+            b,
+            front=diameter_for_down(loaded[0], down[0]),
+            rear=diameter_for_down(loaded[1], down[1]))
+    return b
+
+
+def suspension_range_mm(rec: bytes, loaded) -> tuple[int, int, int, int]:
+    """The range in whole millimetres: up front, up rear, down front, down rear.
+
+    The up half is rounded, the down half is truncated, and that is not an
+    oversight: the down half is solved for so truncation lands on the wanted
+    number, while the upper half is stored exactly as asked and the game prints
+    it inconsistently (a shipped 0.010 reads as +10, our 0.025 read as +24).
+    Rounding at least makes the shipped cars report what the screen says.
+    """
+    up = suspension_travel(rec)
+    down = suspension_down_travel(rec, loaded[0], loaded[1])
+    return (int(round(up[0] * 1000.0)), int(round(up[1] * 1000.0)),
+            display_mm(down[0]), display_mm(down[1]))
 
 
 # ------------------------------------------------------------------ selftest

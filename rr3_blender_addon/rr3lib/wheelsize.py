@@ -17,46 +17,59 @@ own numbers and confirmed against Monkey Tool's independent implementation
   round plane) and *not* along x (the axle), so the tyre gets taller but never
   wider - the width is already modelled per car and stretching it would push
   the tyre into the suspension.
-* **the target is the tyre diameter in ``suspensionbehaviour.suspensiondata``**
-  (floats 21 and 22, front and rear, in metres), so
-  ``k = diameter / 2 / mesh_tyre_radius``.
-* if the car has no suspension row, the fallbacks are, in order: fill the wheel
-  arch (``(arch - 0.035) / mesh_tyre_radius``), then the axle height from
-  ``.points``, then 1.0.
+* **the target is the car's appearance record**, not the suspension table:
+  eight floats at ``+0`` of the ``carappearances.appearances.nct`` record,
+  front four then rear four.
 
-WHERE THE NUMBERS LIVE
-----------------------
-``suspensionbehaviour.suspensiondata.nct`` holds a 140-byte record per car;
-``struct.unpack_from("<f", rec, 4 + 4*21)`` is the front tyre **diameter** and
-``4 + 4*22`` the rear.  Only 172 of the 540 cars have a row there.
+WHAT THE EIGHT FLOATS ARE (in-game, settled by experiment)
+---------------------------------------------------------
+``f1`` / ``f5``
+    front / rear **tyre radius in metres** - but *not* drawn 1:1.  The record
+    value is a **scale reference**: the wheel is drawn at ``f1 / mesh tyre
+    radius`` times the mesh, and the mesh it multiplies has already been through
+    that same factor, so the two collapse into a square::
 
-For the other 368 the appearance record's first 32 bytes carry the same
-information: eight floats, front four then rear four, and
+        drawn tyre = mesh * (f1 / mesh) ** 2 = f1 ** 2 / mesh
 
-* ``f1`` / ``f5`` = **loaded** tyre radius (median 0.9498 x the free radius,
-  i.e. a 5 % static sag),
-* ``f0`` / ``f4`` = the rim radius the car wears,
-* ``f2`` / ``f6`` = the same rim radius again for the cars that state it (165
-  cars, matches the rim mesh within 1 %),
-* ``f3`` / ``f7`` = a sidewall-ish width, still undecided.
+    It only *looks* 1:1 on a shipped car, because a shipped mesh is at the size
+    the record was written for.  Measured three times on one car, one launch
+    each: mesh 0.3599 + f1 0.3595 = right; mesh 0.2863 + f1 0.3595 = 1.25x too
+    big; mesh 0.2863 + f1 0.2860 = 0.8x too small.  Only the square fits all
+    three.  :func:`record_value` is the inverse of it, and it is the only place
+    a record value should be computed.
+``f2`` / ``f6``
+    front / rear **rim radius in metres**, with the same square law and
+    *independent* of ``f1``: ``drawn rim = f2 ** 2 / mesh rim``.  It is not a
+    multiple of anything, so a record copied from a donor keeps the donor's rim
+    size.
+``f0`` / ``f4``
+    unknown - *not* the rim radius (median ``f0/rim`` is 1.196 and 47 cars have
+    ``f0 > f1``, i.e. a rim taller than its tyre).  Left alone.
+``f3`` / ``f7``
+    unknown, probably tyre width.  Left alone.
 
-``f1`` agrees with ``POINT_WHEEL_*``'s height above the ground to 13 mm on
-average, which is what a tyre does under load, so the appearance block is a
-usable fallback.
+The mesh supplies proportions only.  Two scalings therefore act at once, and
+they can disagree:
 
-WHICH FACTOR TO USE
--------------------
-Two are defensible and they differ by ~5 %:
+    drawn bore = mesh bore x (f1 / mesh tyre radius)
+    gap        = f2 - drawn bore
 
-``"engine"``
-    ``k = suspension_diameter / 2 / mesh_radius``.  Exactly what the game
-    computes.  The tyre then reaches the *free* radius, which is 15 mm more
-    than the hub height, so it sinks slightly into the ground - the game hides
-    that with suspension travel.
-``"ground"``
-    ``k = axle_height / mesh_radius`` (equivalently ``f1 / mesh_radius``).  The
-    tyre sits exactly on the ground under a static car, which is what a
-    rendered still wants.
+A negative gap is the "small rim, fat tyre" ring of daylight.  Our own car had
+``f2 = 0.2400`` against a drawn bore of ``0.2708`` - a 31 mm ring, inherited
+from the donor record, not from the mesh.  ``f2 = mesh rim x f1 / mesh tyre``
+closes it, which is what :func:`plan` and ``wheelsize_set.py --fit`` do.
+
+``suspensionbehaviour.suspensiondata.nct`` floats 21 / 22 hold a tyre diameter
+per axle and *look* authoritative, but changing them moves nothing on screen;
+they are what Monkey Tool's previewer reads.  :func:`suspension_diameters` is
+kept for that comparison and for cars whose appearance block is empty.
+
+THE TWO SCALINGS DO NOT EXTEND TO THE BRAKES
+--------------------------------------------
+The rotor and the caliper are **not** multiplied by ``f1 / mesh tyre``: a stock
+car authors them at their real size and the engine leaves them there.  Either
+author the whole wheel assembly at final size, or normalise tyre + rim to the
+shared template and author rotor + caliper at final size - never half of each.
 """
 from __future__ import annotations
 
@@ -66,6 +79,8 @@ import struct
 from dataclasses import dataclass, field
 
 from . import appearance as appearlib
+from . import geometry as geomlib
+from . import m3g as m3glib
 from . import parts as partslib
 from . import spec as speclib
 
@@ -185,6 +200,163 @@ def mesh_radii(shared_m3g: str, lod: str = "A") -> tuple[float, float]:
     if rear is None:
         rear = front
     return (front or MESH_TYRE_RADIUS, rear or front or MESH_TYRE_RADIUS)
+
+
+def mesh_tyre_rim(shared_m3g: str, lod: str = "A") -> tuple[float, float, float]:
+    """``(tyre radius, rim radius, tyre bore)`` in metres, from one shared model.
+
+    Measured from the vertices, not the bounding box: a tyre's box cannot give
+    the bore (the outer wall spans -R..+R on both axes), and the bore is what
+    decides whether the rim shows a ring of daylight.
+
+    The meshes are found by :func:`rr3lib.parts.shared_role`, not by their full
+    name, because the ``_mm_<tag>`` suffix is a material hint that does not
+    always agree with the part: 230 cars tag a low-LOD tyre ``_mm_wheel`` and 53
+    tag their LOD F rim ``_mm_tyre``.  A rear-only mesh is used only when the
+    axle has no front one, so a model that ships both still reports the front.
+    """
+    model = m3glib.M3G(shared_m3g)
+    found = {"tyre": 0.0, "rim": 0.0, "tyre_rear": 0.0, "rim_rear": 0.0}
+    bore = 0.0
+    for obj in model.of_type(m3glib.T_MESH):
+        letter, role = partslib.shared_role(obj.data.get("name") or "")
+        if letter and letter != lod:
+            continue
+        if role not in ("TYRE", "WHEEL", "TYRE_REAR", "WHEEL_REAR"):
+            continue
+        md = geomlib.extract_mesh(model, obj)
+        if not md.positions:
+            continue
+        radii = [(y * y + z * z) ** 0.5 for _x, y, z in md.positions]
+        if role in ("TYRE", "TYRE_REAR"):
+            key = "tyre" if role == "TYRE" else "tyre_rear"
+            if max(radii) > found[key]:
+                found[key] = max(radii)
+            if role == "TYRE" and (not bore or min(radii) < bore):
+                bore = min(radii)
+        else:
+            key = "rim" if role == "WHEEL" else "rim_rear"
+            found[key] = max(found[key], max(radii))
+    tyre = found["tyre"] or found["tyre_rear"]
+    rim = found["rim"] or found["rim_rear"]
+    if tyre <= 0:
+        raise WheelSizeError(f"no LOD_{lod} tyre mesh in {shared_m3g}")
+    return tyre, (rim or tyre), (bore or tyre)
+
+
+def record_value(target: float, mesh: float) -> float:
+    """The appearance-record float that draws ``mesh`` at radius ``target``.
+
+    Inverts the engine's rule (module docstring)::
+
+        drawn = f ** 2 / mesh          ->      f = sqrt(target * mesh)
+
+    ``target == mesh`` returns ``mesh``, which is why a mesh authored at its
+    final size can still be matched 1:1 - and why the square only shows up once
+    the mesh has been rescaled away from the record.
+    """
+    if mesh <= 0:
+        raise WheelSizeError(f"mesh radius must be positive, not {mesh!r}")
+    if target <= 0:
+        raise WheelSizeError(f"target radius must be positive, not {target!r}")
+    return (target * mesh) ** 0.5
+
+
+def record_values(mesh_tyre: float, mesh_rim: float, scale: float, *,
+                  rim_scale: float | None = None) -> tuple[float, float]:
+    """``(f_tyre, f_rim)`` for one axle drawn ``scale`` times its own mesh.
+
+    ``scale`` is the number a modder actually knows: *how much bigger than the
+    exported mesh this axle should be*.  Both parts are drawn at ``mesh * scale``
+    (the rim keeps the model's own rim/tyre ratio, so no ring of daylight opens
+    up), and the record gets the square root of that::
+
+        f_tyre = sqrt(mesh_tyre * scale * mesh_tyre) = mesh_tyre * sqrt(scale)
+        f_rim  = sqrt(mesh_rim  * scale * mesh_rim)  = mesh_rim  * sqrt(scale)
+
+    The record therefore moves by ``sqrt(scale)`` while the screen moves by
+    ``scale``.  Multiplying the record by ``scale`` instead - which is what this
+    workbench used to do - draws the wheel ``scale`` times too big, which is
+    exactly the "I typed the factor and the wheels exploded" report.
+
+    ``rim_scale`` overrides the rim's factor when a model wants a rim that does
+    not follow its tyre (a low-profile swap), and is rarely needed.
+    """
+    if scale <= 0:
+        raise WheelSizeError(f"scale must be positive, not {scale!r}")
+    rim_k = scale if rim_scale is None else rim_scale
+    return (record_value(mesh_tyre * scale, mesh_tyre),
+            record_value(mesh_rim * rim_k, mesh_rim))
+
+
+def appearance_wheel_block(depot: str, car: str) -> tuple[float, ...] | None:
+    """The eight wheel floats of a car's appearance record.
+
+    Looked up by the **appearance id in the spec**, not by the car id or the
+    folder name: the three id spaces differ for most cars (ours is car 611,
+    appearance 564), and matching on the wrong one silently reports "no record".
+    """
+    try:
+        cid = _car_id(depot, car)
+        want = speclib.load_spec(depot, cid).appearance_id() if cid else 0
+        _count, records = appearlib.load(depot)
+    except Exception:  # noqa: BLE001
+        return None
+    if want:
+        for rec in records:
+            if rec.id == want:
+                return rec.wheel_sizes()
+    name = car.encode("ascii", "replace")
+    for rec in records:
+        if rec.name == name:
+            return rec.wheel_sizes()
+    return None
+
+
+def write_appearance_wheel_block(depot: str, car: str, values: dict) -> dict:
+    """Write wheel floats into a car's appearance record, in place.
+
+    ``values`` maps float index (0..7) to a new value; anything left out keeps
+    what the record already has, so a caller can set only ``f1``/``f2`` and
+    leave the four unknowns untouched.  A zero or negative value is skipped for
+    the same reason: it means "no opinion", never "set it to nothing".
+
+    Returns ``{"name", "id", "from", "to", "changed"}`` so a caller can log what
+    actually moved rather than what it asked for.
+    """
+    cid = _car_id(depot, car)
+    if not cid:
+        raise WheelSizeError(f"no spec for {car}, so no appearance id to look up")
+    want = speclib.load_spec(depot, cid).appearance_id()
+    if not want:
+        raise WheelSizeError(f"{car}'s spec names no appearance record")
+    path = os.path.join(depot, *appearlib.APPEARANCES.split("/"))
+    count, records = appearlib.load(depot)
+    rec = next((r for r in records if r.id == want), None)
+    if rec is None:
+        raise WheelSizeError(f"appearance record {want} is not in the table")
+    before = list(rec.wheel_sizes())
+    after = list(before)
+    for index, value in values.items():
+        index = int(index)
+        if not (0 <= index < 8) or value is None:
+            continue
+        value = float(value)
+        if value > 0:
+            after[index] = value
+    # The record stores float32, so a value that came back out of it never
+    # compares equal to the same number written as a Python float.  A tolerance
+    # is what keeps "write 0.3596 again" from being reported as a change.
+    changed = [i for i, (a, b) in enumerate(zip(before, after))
+               if abs(a - b) > 1e-6]
+    if changed:
+        rec.set_wheel_sizes(after)
+        appearlib.save(count, records, path)
+    return {
+        "name": car, "id": want,
+        "from": before, "to": after,
+        "changed": changed,
+    }
 
 
 def axle_heights(points_file: str) -> tuple[float | None, float | None]:

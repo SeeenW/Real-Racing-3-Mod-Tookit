@@ -147,11 +147,32 @@ def build_damage(depot: str, *, donor_id: int, new_id: int):
 
 
 def build_appearance(depot: str, *, donor_name: str, new_name: str,
-                     new_id: int | None = None):
-    """Clone the donor's appearance record under the new folder name."""
+                     new_id: int | None = None, wheel_sizes=None):
+    """Clone the donor's appearance record under the new folder name.
+
+    ``wheel_sizes`` overrides the record's first eight floats - the wheel block.
+    They are **absolute metres**: ``f1``/``f5`` are the tyre radius the engine
+    draws and ``f2``/``f6`` the rim radius, both 1:1.  That is why a pack whose
+    wheel mesh was normalised to the shared template (so one model can serve both
+    axles) still comes out at the car's own tyre size: the size lives here, not
+    in the mesh.  Accepts ``{index: value}`` or any eight-item sequence; zero or
+    ``None`` keeps the donor's value.
+    """
     count, recs = appearlib.load(depot)
     rec = appearlib.add_record(recs, donor_name, new_id=new_id,
                                new_name=new_name.encode("ascii"))
+    if wheel_sizes:
+        values = list(rec.wheel_sizes())
+        pairs = (wheel_sizes.items() if isinstance(wheel_sizes, dict)
+                 else enumerate(wheel_sizes))
+        for i, x in pairs:
+            i = int(i)
+            if not (0 <= i < 8) or x is None:
+                continue
+            x = float(x)
+            if x > 0:
+                values[i] = x
+        rec.set_wheel_sizes(values)
     return count + 1, recs, rec
 
 
@@ -336,7 +357,7 @@ def build_car(depot: str, pkg: str, out_dir: str, *, new_id: int,
               paints=None, car_class: str = "", make: str = "",
               slot_files: dict | None = None,
               aero_kind: bytes = b"", aero_params=(),
-              log=print) -> dict:
+              wheel_sizes=None, log=print) -> dict:
     """Write every file a new car needs under ``out_dir`` (a ``files/`` mirror).
 
     ``out_dir`` is written as a mirror of the game's ``files`` folder, so the
@@ -412,7 +433,8 @@ def build_car(depot: str, pkg: str, out_dir: str, *, new_id: int,
     # 3. appearance record
     count, recs, rec = build_appearance(depot, donor_name=donor_name,
                                         new_name=new_name,
-                                        new_id=appearance_id)
+                                        new_id=appearance_id,
+                                        wheel_sizes=wheel_sizes)
     appearlib.save(count, recs, os.path.join(data, "carappearances.appearances.nct"))
     log(f"  appearances : {count} records, new id {rec.id} name {rec.name.decode()}")
 

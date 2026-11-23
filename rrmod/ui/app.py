@@ -683,6 +683,15 @@ class MainWindow(QMainWindow):
                         log=lambda m: None)
                     if wing.get("added"):
                         out["wing_paint"] = wing
+                # The ride height goes after the wheels: the down half is
+                # measured from the drawn wheel, so it has to see the final
+                # radii.  An unchanged range writes nothing.
+                if info.get("ride_height"):
+                    rh = info["ride_height"]
+                    out["ride_height"] = editlib.set_suspension_range(
+                        root, info["new_name"],
+                        up_mm=(rh["up_front"], rh["up_rear"]),
+                        down_mm=(rh["down_front"], rh["down_rear"]))
                 # the figures come last: the spec only exists once the build has
                 # cloned the donor's
                 if info.get("stats"):
@@ -836,6 +845,16 @@ class MainWindow(QMainWindow):
             if info.get("wheel_sizes"):
                 out["wheels"] = editlib.set_wheel_sizes(
                     root, car_name, info["wheel_sizes"], log=lambda m: None)
+            # Same reason as the wheels, and after them for the same reason: the
+            # down half of the ride height is measured from the wheel that was
+            # just written, so this has to run second.  A range the user did not
+            # touch comes back unchanged and writes nothing.
+            if info.get("ride_height"):
+                rh = info["ride_height"]
+                out["ride_height"] = editlib.set_suspension_range(
+                    root, car_name,
+                    up_mm=(rh["up_front"], rh["up_rear"]),
+                    down_mm=(rh["down_front"], rh["down_rear"]))
             # A pack that brings wing meshes needs paint rows for them, or the
             # game draws the wing through car_flat and it comes out black.  The
             # rows are only added where the car has none, so a wing with its own

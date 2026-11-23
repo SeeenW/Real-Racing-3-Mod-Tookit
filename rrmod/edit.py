@@ -1090,6 +1090,96 @@ def set_aero_flag(root: str, name: str, enable: bool = True, *,
     return out
 
 
+def set_suspension_range(root: str, name: str, *, up_mm=None,
+                         down_mm=None) -> dict:
+    """Set the ride-height slider's range, in millimetres, both halves.
+
+    ``up_mm`` and ``down_mm`` are ``(front, rear)`` tuples or ``None``.  The up
+    half is ``suspensiondata`` f23/f24.  The down half is not stored at all -
+    the engine computes ``tyre diameter - 2 * loaded radius`` - so writing it
+    means solving for the diameter, which is why this needs the car's appearance
+    block and must run *after* any wheel-size change.
+
+    Returns the four numbers the slider should end up showing, alongside what
+    it showed before, so a caller can report the change without re-reading.
+    """
+    from rr3lib import appearance as appearlib
+
+    _begin(f"Set the ride height of {name}")
+    depot = os.path.join(root, ".depot")
+    inv = depotlib.scan(root)
+    entry = inv.get(name)
+    if entry is None:
+        raise EditError(f"{name} is not installed")
+    path = os.path.join(depot, *speclib.SUSPENSION.split("/"))
+    table = speclib.load_suspension(depot)
+    try:
+        at = table.ids().index(entry.car_id)
+    except ValueError:
+        raise EditError(
+            f"{name} (id {entry.car_id}) has no row in "
+            f"{os.path.basename(path)}") from None
+    rec = table.records[at]
+
+    loaded = None
+    try:
+        _, recs = appearlib.load(depot)
+        for r in recs:
+            if r.name.decode("ascii", "replace") == name:
+                loaded = r.tyre_radius()
+                break
+    except Exception:                            # noqa: BLE001
+        loaded = None
+    if loaded is None:
+        if down_mm is not None:
+            raise EditError(
+                f"{name} has no appearance record, so the downward travel "
+                f"cannot be computed")
+        loaded = (0.0, 0.0)
+
+    before = speclib.suspension_range_mm(rec, loaded)
+    after_rec = speclib.suspension_range(
+        rec, loaded,
+        up=None if up_mm is None else (up_mm[0] / 1000.0, up_mm[1] / 1000.0),
+        down=None if down_mm is None
+        else (down_mm[0] / 1000.0, down_mm[1] / 1000.0))
+    out = {"path": path, "loaded": loaded, "before": before,
+           "after": speclib.suspension_range_mm(after_rec, loaded),
+           "changed": after_rec != rec, "synced": None}
+    if not out["changed"]:
+        return out
+    _backup(root, path)
+    table.records[at] = after_rec
+    nctlib.write(path, table.to_bytes())
+    out["synced"] = sync_file(root, name=name,
+                              rel_path="/" + speclib.SUSPENSION, local=path)
+    return out
+
+
+def set_suspension_travel(root: str, name: str, *, front_mm: float | None = None,
+                          rear_mm: float | None = None) -> dict:
+    """Set only the **upward** half of a car's ride-height slider.
+
+    Kept for the callers that only want the up side; :func:`set_suspension_range`
+    is the one the pages use.
+    """
+    up = None
+    if front_mm is not None or rear_mm is not None:
+        # A half-specified pair still needs both numbers, so read the other end
+        # off the table rather than guessing.
+        depot = os.path.join(root, ".depot")
+        inv = depotlib.scan(root)
+        entry = inv.get(name)
+        if entry is None:
+            raise EditError(f"{name} is not installed")
+        rec = speclib.load_suspension(depot).get(entry.car_id)
+        cur = speclib.suspension_travel(rec)
+        up = (front_mm / 1000.0 if front_mm is not None else cur[0],
+              rear_mm / 1000.0 if rear_mm is not None else cur[1])
+    return set_suspension_range(root, name, up_mm=None if up is None
+                                else (up[0] * 1000.0, up[1] * 1000.0))
+
+
 
 def _driver_dir(root: str) -> str:
     """The ``.depot`` that holds ``driver/``, preferring the working copy.
