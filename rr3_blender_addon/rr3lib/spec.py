@@ -1956,11 +1956,14 @@ def set_suspension_tyre(rec: bytes, front: float | None = None,
 
 #: Index of the front/rear suspension **travel** in a suspension record's
 #: floats, in metres.  Measured over all 541 cars: 0.003 .. 0.150 for anything
-#: sane, median 0.039 front and 0.041 rear.  There is no min/max pair anywhere
-#: in the shipped tables - the engine derives the adjustable range from these
-#: two numbers and the geometry in the appearance block, so writing them is the
-#: only way to change how far a car can sit.  See
-#: ``docs/避震行程-调节范围.md``.
+#: sane, median 0.039 front and 0.041 rear.
+#:
+#: These two numbers are the *upward* half of the ride-height slider and nothing
+#: else.  Proved on screen on 2026-11-23: the Silvia reads +10/+15 at the shipped
+#: 0.010/0.015, +180/+180 at 0.180/0.180 and +5/+4 at 0.005/0.005, while the
+#: *downward* half stayed at -9/-14 through all three - so the lower limit comes
+#: from the geometry in the appearance block and writing these smaller only
+#: shortens the up side.  See ``docs/避震行程-调节范围.md``.
 SUSP_TRAVEL_FRONT = 23
 SUSP_TRAVEL_REAR = 24
 

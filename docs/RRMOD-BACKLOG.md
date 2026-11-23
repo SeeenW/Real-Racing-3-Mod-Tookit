@@ -461,7 +461,7 @@ recorded so they are not re-litigated from scratch.
       1200 → 1218 (group 83).
 - [ ] **[ui]** The animation page can swap track numbers but nothing on screen
       has been checked after a swap - only the bytes were.
-- [ ] **[hold]** Suspension travel range. Researched on 2026-11-23 and written
+- [x] **[hold]** Suspension travel range. Researched and answered on 2026-11-23 and written
       up in `docs/避震行程-调节范围.md`: there is **no min/max pair** in any
       table. `custom.suspension.nct` is a one-item unlock (`FullAdjustSuspension`),
       `suspensiondata` floats 23/24 are the front/rear travel in metres (Silvia
@@ -469,8 +469,15 @@ recorded so they are not re-litigated from scratch.
       on all 541 cars - so the earlier "float 24 is the range, float 25 is the
       rear" guess is dead. The visible limit also comes from the 266 byte
       appearance block, proven by the Reventón -> Chiron swap shrinking the
-      adjustable range. Still open: an in-game A/B (Silvia at 0.032/0.031, then
-      at 0.150/0.150) to see whether the numbers move the body on screen.
+      adjustable range. **Answered on screen 2026-11-23**: Silvia (id 114) at
+      f23/f24 = 0.180/0.180 shows **+180/-9 front, +180/-14 rear** - so the *up*
+      travel is f23/f24 straight (no clamp), the *down* travel does not follow
+      them at all, and the 1 mm gap is float32 truncation (0.010 reads as 9).
+      Model, settled the same day by a third value (0.005/0.005 -> +5/+4 up,
+      -9/-14 down, unchanged): `[-geometry, +travel]`. The down half never looks
+      at this table, so lowering a car means editing the 266 byte appearance
+      block, not writing a smaller travel. Closed - the remaining unknown is
+      which bytes in the block hold the geometry.
 - [x] **[feat]** Texture import/export. `rrmod/textures.py` plus the Textures
       tab's two buttons: **Save this page as a PNG** decodes whichever copy is on
       disk, **Put a picture in this page** encodes it back. New on the writer
