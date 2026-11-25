@@ -459,13 +459,13 @@ step("anchors survive a vehicle import", _anchors_from_a_real_car)
 
 
 def _blur_wheels():
-    """Each wheel's motion-blur stand-in lands in ``<car>_LOD<X>_blur``, hidden.
+    """Each wheel's motion-blur stand-in lands in ``<car>_LOD<X>_blur``, visible.
 
     Two meshes per wheel, not one: the silhouette (``..._BLUR_mm_wheel``) and a
     flatter sheet over it (``..._BLUR_mm_wheel_blur``).  Both are modelled in
-    the rim's frame, so both hang off the ``WHEEL_<corner>`` pivot; the folder
-    starts hidden in the viewport and in the render, because left visible they
-    only double the wheel.
+    the rim's frame, so both hang off the ``WHEEL_<corner>`` pivot.  They come
+    in **visible** - a folder the importer hid was a folder nobody found again -
+    and the sub-collection is what makes hiding the lot one click.
     """
     depot = os.environ.get(
         "RR3_DEPOT",
@@ -479,8 +479,8 @@ def _blur_wheels():
                                      animate=False, import_anchors=False)
     coll = bpy.data.collections.get(f"{car}_LODA_blur")
     assert coll is not None, "no <car>_LODA_blur collection"
-    assert coll.hide_viewport, "the blur folder is visible in the viewport"
-    assert coll.hide_render, "the blur folder still renders"
+    assert not coll.hide_viewport, "the blur folder is hidden in the viewport"
+    assert not coll.hide_render, "the blur folder is hidden in the render"
     objs = list(coll.objects)
     assert len(objs) == 8, f"{len(objs)} blur meshes, expected 4 corners x 2"
     kinds = {o["rr3_wheel"] for o in objs}
@@ -490,11 +490,12 @@ def _blur_wheels():
         assert ob.parent is not None and ob.parent.name.startswith("WHEEL_"), \
             f"{ob.name} is not on a WHEEL_ pivot"
         assert ob["rr3_wheel_blur"] is True
+        assert not ob.hide_get(), f"{ob.name} is hidden on its own"
     assert coll.name in [c.name for c in bpy.data.collections[f"{car}_LODA"].children]
-    return f"{len(objs)} meshes, hidden, hanging off the WHEEL_ pivots"
+    return f"{len(objs)} meshes, visible, hanging off the WHEEL_ pivots"
 
 
-step("the blur stand-in of each wheel lands in a hidden folder", _blur_wheels)
+step("the blur stand-in of each wheel lands in a folder of its own", _blur_wheels)
 
 
 def _normals_are_editable():
@@ -542,6 +543,69 @@ def _normals_are_editable():
 
 
 step("normals are editable by default, and can still be baked", _normals_are_editable)
+
+
+def _anchors_selected_only():
+    """Only the selected anchors go out, and an empty selection is refused.
+
+    The reason the switch exists: a project file that keeps the anchors of more
+    than one car.  Exporting the scene there writes one car's anchors over the
+    other's, so "nothing selected" must fail loudly rather than fall back to the
+    whole scene.
+    """
+    depot = os.environ.get(
+        "RR3_DEPOT",
+        r"E:\DXT_480x320+960x640+2048x1536数据包-Build260716\files\.depot")
+    car = "2018_bugatti_chiron_sport"
+    src = os.path.join(depot, "vehicles", car, f"{car}_a.m3g")
+    if not os.path.isfile(src):
+        return "skipped (no depot)"
+
+    from rr3_blender_addon.rr3lib import points as pl
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.rr3_vehicle(filepath=src, lod="A", textures=False,
+                                     animate=False, import_anchors=True)
+    anchors = [o for o in bpy.data.objects
+               if o.type == "EMPTY" and o.name.startswith("ANCHOR_")]
+    assert anchors, "no anchors came in"
+
+    # A second set, like a scene that holds another car's anchors too.
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in anchors:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = anchors[0]
+    bpy.ops.object.duplicate(linked=False)
+    total = len([o for o in bpy.data.objects if o.type == "EMPTY"])
+    assert total > len(anchors), "the duplicate did not take"
+
+    bpy.ops.object.select_all(action="DESELECT")
+    pick = anchors[:5]
+    for o in pick:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = pick[0]
+    out = os.path.join(TMP, "selected.points")
+    bpy.ops.export_scene.rr3_points(filepath=out, only_selected=True)
+    written = pl.load(out)
+    assert len(written.records) == 5, f"{len(written.records)} records, expected 5"
+    names = {r.name for r in written.records}
+    assert names <= {o["rr3_point_name"] if o.get("rr3_point_name") else o.name
+                     for o in pick} | {o.name[len("ANCHOR_"):] for o in pick}, names
+
+    # Nothing selected: refuse, do not fall back to the whole scene.  An error
+    # report comes back as a RuntimeError from Python, so catch both shapes.
+    bpy.ops.object.select_all(action="DESELECT")
+    try:
+        res = bpy.ops.export_scene.rr3_points(filepath=out, only_selected=True)
+    except RuntimeError as exc:
+        res = "raised"
+        assert "nothing selected" in str(exc), str(exc)
+    assert res in ({"CANCELLED"}, "raised"), res
+    return f"5 of {total} anchors, empty selection refused"
+
+
+step("anchors: only the selected ones, and no silent fallback",
+     _anchors_selected_only)
 
 
 print()

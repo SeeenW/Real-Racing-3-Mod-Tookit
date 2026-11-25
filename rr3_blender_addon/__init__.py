@@ -1603,9 +1603,10 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
     hangs off the same ``WHEEL_<corner>`` pivot as the rim it replaces: it
     follows the steering and the size.  A pre-assembled LOD (F) gets its blur
     at the origin like its wheel, because that mesh already spans both sides of
-    the car.  They land in ``<car>_LOD<X>_blur``, which starts **hidden in the
-    viewport and in the render** - left visible they would only double the
-    wheel and z-fight with it - and one click in the outliner brings them back.
+    the car.  They land in ``<car>_LOD<X>_blur`` and come in **visible**: they
+    sit exactly where the rim is, so they will z-fight with it, and hiding the
+    one folder in the outliner is the user's call - a folder the importer hid
+    was, in practice, a folder nobody could find again.
 
     ``file_normals`` is ``False`` by default, the opposite of what this add-on
     used to do; :func:`_build_mesh_object` explains why (custom split normals
@@ -1696,15 +1697,16 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
     # The motion-blur stand-in of the wheels.  The engine stops drawing the rim
     # and swaps in these two meshes once a wheel spins fast enough that its
     # spokes would strobe.  They are modelled at the wheel's own origin, in the
-    # same place as the rim, so importing them *visible* only doubles the wheel
-    # and z-fights with it: they go into a folder of their own, hidden in the
-    # viewport and in the render, and are one click away when they are wanted.
+    # same place as the rim - but they come in **visible**, as they are, because
+    # a folder the importer hides is a folder the user cannot find again (the
+    # 2026-11-25 build hid it in the viewport *and* the render, and the wheels
+    # then looked like they had never been imported at all).  They sit in a
+    # sub-collection of their own, so hiding or deleting the lot is one click
+    # and the parent-child chain to the WHEEL_ pivots is what carries them.
     blur_coll = None
     if blur_wheels and (plan.wheels.front_blur_meshes
                         or plan.wheels.rear_blur_meshes):
         blur_coll = _collection(f"{car}_LOD{lod}_blur", coll)
-        blur_coll.hide_viewport = True
-        blur_coll.hide_render = True
         blur_coll["rr3_blur"] = True
 
     for ob in body["objects"]:
@@ -3129,9 +3131,8 @@ class IMPORT_OT_rr3_vehicle(Operator, ImportHelper):
         name="Motion-blur wheels", default=True,
         description="Import the two meshes each wheel spins as when it blurs - "
                     "the silhouette and a flatter sheet over it - into a "
-                    "'<car>_LOD<X>_blur' sub-collection that starts hidden in the "
-                    "viewport and in the render. Left visible they only double "
-                    "the wheel and z-fight with it",
+                    "'<car>_LOD<X>_blur' sub-collection. They sit where the rim "
+                    "is, so hide that one folder if they get in the way",
     )
     file_normals: BoolProperty(
         name="Normals from the file", default=False,
@@ -3192,7 +3193,7 @@ class IMPORT_OT_rr3_vehicle(Operator, ImportHelper):
             msg += f", {len(res['wheels'])} wheel objects"
         if res.get("blur"):
             msg += (f", {len(res['blur'])} blur meshes in "
-                    f"{car}_LOD{lod or self.lod}_blur (hidden)")
+                    f"{car}_LOD{lod or self.lod}_blur")
         if plan.aero_parts:
             msg += f", {len(plan.aero_parts)} pivots keyframed"
         fit = res.get("wheel_fit")
@@ -3431,6 +3432,15 @@ class EXPORT_OT_rr3_points(bpy.types.Operator, ExportHelper):
                     "anchors has no other way to export one of them")
 
     def execute(self, context):
+        if self.only_selected and not any(o.type == "EMPTY"
+                                          for o in context.selected_objects):
+            # Writing the whole scene instead would be the worst possible
+            # answer here: the reason this option exists is a scene that holds
+            # more than one set of anchors.
+            self.report({"ERROR"},
+                        "nothing selected - select the anchor empties, or untick "
+                        "'Selected empties only' to write the whole scene")
+            return {"CANCELLED"}
         try:
             n, warnings = explib.export_points(self.filepath,
                                                only_tagged=self.only_tagged,
@@ -4014,6 +4024,12 @@ class RR3_PT_panel(bpy.types.Panel):
         col.operator("export_scene.rr3_m3g", text="Model (.m3g)", icon="MESH_DATA")
         col.operator("export_scene.rr3_m3g_raw", text="Generic model (.m3g)", icon="MESH_CUBE")
         col.operator("export_scene.rr3_points", text="Anchors (.points)", icon="EMPTY_ARROWS")
+        # The same operator with the selection switch already on.  The tick box
+        # lives in the file browser's sidebar, which is where nobody looks when
+        # the scene holds two cars' anchors and they want one of them out.
+        sel = col.operator("export_scene.rr3_points", text="Selected anchors (.points)",
+                           icon="RESTRICT_SELECT_OFF")
+        sel.only_selected = True
         col.operator("export_scene.rr3_banim", text="Part animation (.banim)", icon="EMPTY_AXIS")
         col.operator("export_scene.rr3_animxml", text="Animation clips (.xml)", icon="FILE_TEXT")
 

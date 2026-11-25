@@ -77,6 +77,7 @@
 | | Anchors (.points) | `import_scene.rr3_points` |
 | Export | Model (.m3g) | `export_scene.rr3_m3g` |
 | | Anchors (.points) | `export_scene.rr3_points` |
+| | Selected anchors (.points) | 同一个 operator，`only_selected` 预先勾上——工程里存了两份锚点时用这个 |
 | | Part animation (.banim) | `export_scene.rr3_banim` |
 | | Animation clips (.xml) | `export_scene.rr3_animxml` |
 | Textures | Export textures | `rr3.export_textures` |
@@ -142,7 +143,7 @@
 | `material_depot` | 空 | 装 `materials/materials.bin` 的目录。留空则从车目录向上找 8 层；车被拷出 depot 时填这里 |
 | `separate_damage` | 开 | 把 `*_DAMAGE` / `*_BROKEN_*` 损伤件放进 `<车名>_LOD<X>_damaged` 子集合 |
 | `separate_camera` | 开 | 把 `BONNETCAM_*` 车头视角壳和 `LIT_*_GLOW` 发光片放进 `<车名>_LOD<X>_camera` 子集合 |
-| `blur_wheels` | 开 | 把每个轮子的**动态模糊替身**（两个网格）放进 `<车名>_LOD<X>_blur` 子集合，**视口和渲染里都默认隐藏** |
+| `blur_wheels` | 开 | 把每个轮子的**动态模糊替身**（两个网格）放进 `<车名>_LOD<X>_blur` 子集合，可见；挡事就关掉那个子集合 |
 | `file_normals` | **关** | 关＝法向由几何实时算（可编辑，推荐）；开＝把 `.m3g` 里的法向烘成自定义拆边法向（还原度最高，但一变形就花） |
 
 > **装配顺序**：整车导入是"**先导 points，再按 points 位置装轮子**"。
@@ -192,8 +193,9 @@
 > （`x = 0` 就是外侧面），所以插件把它们挂在**同一个 `WHEEL_<角标>` 枢轴**下，跟着转向、
 > 跟着径向缩放（`scale = (1, k, k)`）；宽度不拉，因为它只是剪影。
 >
-> 它们进 `<车名>_LOD<X>_blur`，**视口和渲染里都默认隐藏**——和轮子完全重合，留着只会
-> 双重渲染、z-fighting。想看就在大纲里把那个集合的眼睛点开（渲染隐藏是单独的开关）。
+> 它们进 `<车名>_LOD<X>_blur`，**正常显示**。和轮子完全重合，所以看上去像"轮子叠了两个"，
+> 觉得挡事就把这一个子集合关掉（或直接删掉）；`blur_wheels` 不勾则完全不导。
+> 早先的版本把这个集合在视口和渲染里都默认隐藏，结果是**用户找不到它**——导入像是没生效。
 > 对象带 `rr3_wheel_blur = True`。
 >
 > LOD F 的模糊网格和它的轮子一样是**整车预装配**（`x` 跨 ±1.04），所以走原点、不缩放，

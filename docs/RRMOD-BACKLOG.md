@@ -1720,10 +1720,14 @@ it.
   LOD F's blur is the whole car already assembled (x spans +-1.04), so that one
   goes to the origin under `WHEEL_LODF_ASSEMBLED` and is not rescaled - exactly
   the rule its wheel already followed.
-- [x] **`<car>_LOD<X>_blur`, hidden in the viewport and in the render.** Left
-  visible they only double the wheel and z-fight with it. `rr3_wheel_blur = True`
-  marks them, and *Export all meshes* now skips them - selecting one by hand
-  still exports it.
+- [x] **`<car>_LOD<X>_blur`, and visible.** `rr3_wheel_blur = True` marks them, and
+  *Export all meshes* skips them - selecting one by hand still exports it.
+- [x] **Revised the same day: the folder is no longer hidden.** The first cut hid
+  it in the viewport *and* in the render, on the theory that it only doubles the
+  wheel. The user then could not find the blur wheels at all and read it as "the
+  import did not bring them in" - a folder the importer hides is a folder nobody
+  looks in. They come in visible now; hiding one sub-collection is the user's
+  call, and `blur_wheels` still turns the import off entirely.
 - [x] `parts._blur_names()` returns the whole list (sorted, so the order is
   stable); `front_wheel_blur` / `rear_wheel_blur` stay as the first name for the
   report and the older tests.
@@ -1748,8 +1752,22 @@ it.
 - [x] **`rr3.clear_custom_normals`** (*Car ▸ Make normals editable*) repairs a
   scene that was imported before this, without re-importing.
 
+### Anchors: export what is selected, and nothing else
+
+- [x] **The switch already existed and was invisible.** `export_scene.rr3_points`
+  has had `only_selected` ("Selected empties only") all along - but it lives in
+  the file browser's sidebar, and a scene holding two cars' anchors is exactly
+  when nobody looks there. The N panel now has *Selected anchors (.points)*: the
+  same operator with the switch pre-ticked.
+- [x] **An empty selection is refused, not widened.** With `only_selected` on and
+  nothing (or only meshes) selected the export stops with "nothing selected"
+  instead of writing the whole scene - a silent fallback would overwrite the
+  other set of anchors, which is the one thing this option is for.
+
 Docs: `rr3_blender_addon/README.md` (two new parameter rows, two long notes, the
-new operator), `docs/插件使用手册.md` (task A gains the three sub-collections and
-the normals note; five rows in the troubleshooting table). Tests: smoke 20 -> 22
+new operator, the selected-anchors button), `docs/插件使用手册.md` (task A gains
+the three sub-collections and the normals note; task F gains the two-sets-of-
+anchors paragraph; six rows in the troubleshooting table). Tests: smoke 20 -> 23
 steps (the blur folder with its 8 meshes and their pivots; normals editable by
-default and still bakable, plus the repair operator). Operators: 19 -> 20.
+default and still bakable, plus the repair operator; the selected-only anchors
+export and its refusal). Operators: 19 -> 20.
