@@ -51,6 +51,11 @@ if errorlevel 1 (
     echo.
     echo The push failed.  The commit is safe on this machine; run this again
     echo once the problem above is fixed.
+    echo.
+    echo If it said "server closed abruptly", "unexpected eof" or
+    echo "CONNECT tunnel failed", the network is blocking git transport to
+    echo github.com - nothing is wrong with the commit.  See
+    echo docs\HANDOFF-20261125-模糊轮毂与法线.md section 6 for the way through.
     pause
     exit /b 1
 )
