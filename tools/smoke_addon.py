@@ -458,6 +458,92 @@ def _anchors_from_a_real_car():
 step("anchors survive a vehicle import", _anchors_from_a_real_car)
 
 
+def _blur_wheels():
+    """Each wheel's motion-blur stand-in lands in ``<car>_LOD<X>_blur``, hidden.
+
+    Two meshes per wheel, not one: the silhouette (``..._BLUR_mm_wheel``) and a
+    flatter sheet over it (``..._BLUR_mm_wheel_blur``).  Both are modelled in
+    the rim's frame, so both hang off the ``WHEEL_<corner>`` pivot; the folder
+    starts hidden in the viewport and in the render, because left visible they
+    only double the wheel.
+    """
+    depot = os.environ.get(
+        "RR3_DEPOT",
+        r"E:\DXT_480x320+960x640+2048x1536数据包-Build260716\files\.depot")
+    car = "2018_bugatti_chiron_sport"
+    src = os.path.join(depot, "vehicles", car, f"{car}_a.m3g")
+    if not os.path.isfile(src):
+        return "skipped (no depot)"
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.rr3_vehicle(filepath=src, lod="A", textures=False,
+                                     animate=False, import_anchors=False)
+    coll = bpy.data.collections.get(f"{car}_LODA_blur")
+    assert coll is not None, "no <car>_LODA_blur collection"
+    assert coll.hide_viewport, "the blur folder is visible in the viewport"
+    assert coll.hide_render, "the blur folder still renders"
+    objs = list(coll.objects)
+    assert len(objs) == 8, f"{len(objs)} blur meshes, expected 4 corners x 2"
+    kinds = {o["rr3_wheel"] for o in objs}
+    assert any(k.endswith("_BLUR_mm_wheel") for k in kinds), sorted(kinds)
+    assert any(k.endswith("_BLUR_mm_wheel_blur") for k in kinds), sorted(kinds)
+    for ob in objs:
+        assert ob.parent is not None and ob.parent.name.startswith("WHEEL_"), \
+            f"{ob.name} is not on a WHEEL_ pivot"
+        assert ob["rr3_wheel_blur"] is True
+    assert coll.name in [c.name for c in bpy.data.collections[f"{car}_LODA"].children]
+    return f"{len(objs)} meshes, hidden, hanging off the WHEEL_ pivots"
+
+
+step("the blur stand-in of each wheel lands in a hidden folder", _blur_wheels)
+
+
+def _normals_are_editable():
+    """No custom normals by default, and the opt-in still bakes them.
+
+    Custom normals are frozen data: after a deform they no longer agree with the
+    surface, and the shading breaks into sharp triangles along a handful of
+    edges while the rest looks fine.  Measured on the Chiron's body shell, one
+    0.25 m stroke leaves 4 edges with a 58.9 deg normal discontinuity when they
+    are baked, and 0 with none (worst 0.04 deg).
+    """
+    depot = os.environ.get(
+        "RR3_DEPOT",
+        r"E:\DXT_480x320+960x640+2048x1536数据包-Build260716\files\.depot")
+    car = "2018_bugatti_chiron_sport"
+    src = os.path.join(depot, "vehicles", car, f"{car}_a.m3g")
+    if not os.path.isfile(src):
+        return "skipped (no depot)"
+
+    def imported(**kw):
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        bpy.ops.import_scene.rr3_vehicle(filepath=src, lod="A", textures=False,
+                                         animate=False, import_anchors=False,
+                                         blur_wheels=False, **kw)
+        return [o for o in bpy.data.objects if o.type == "MESH"]
+
+    meshes = imported()
+    baked = [o.name for o in meshes if o.data.has_custom_normals]
+    assert not baked, f"{len(baked)} mesh(es) came in with baked normals"
+    flat = [o.name for o in meshes
+            if o.data.polygons and not all(p.use_smooth for p in o.data.polygons)]
+    assert not flat, f"{len(flat)} mesh(es) came in flat shaded"
+
+    meshes = imported(file_normals=True)
+    unbaked = [o.name for o in meshes if not o.data.has_custom_normals]
+    assert not unbaked, f"{len(unbaked)} mesh(es) ignored 'Normals from the file'"
+
+    # and the repair operator takes them off again
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.rr3.clear_custom_normals(selected_only=True)
+    left = [o.name for o in bpy.data.objects
+            if o.type == "MESH" and o.data.has_custom_normals]
+    assert not left, f"{len(left)} mesh(es) kept their custom normals"
+    return f"{len(meshes)} meshes, both ways, and the repair operator"
+
+
+step("normals are editable by default, and can still be baked", _normals_are_editable)
+
+
 print()
 if fails:
     print(f"SMOKE TEST: {len(fails)} FAILURE(S): {fails}")

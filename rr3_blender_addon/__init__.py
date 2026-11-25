@@ -311,12 +311,32 @@ def _looks_bone_local(meshes) -> bool:
 
 
 def _build_mesh_object(md, scale: float, convert: bool, coll, offset=(0.0, 0.0, 0.0),
-                       images=None, matrix=None):
+                       images=None, matrix=None, file_normals: bool = False):
     """Build one Blender mesh from an m3g mesh.
 
     ``matrix`` is an optional 4x4 applied in **model space** before the Y-up to
     Z-up turn; it is how a wheel is stretched radially and turned for the right
     side of the car without touching the mesh data.
+
+    ``file_normals`` picks where the shading normals come from, and the default
+    is the opposite of what this add-on used to do for a reason:
+
+    * ``False`` (default) - shade smooth and let Blender compute the normals
+      from the geometry.  Deforming the mesh (edit mode, sculpt, proportional
+      editing) keeps the shading correct, because the normals follow the
+      surface.
+    * ``True`` - bake the normals the file stores as *custom split normals*.
+      This is exact: every hard edge the artist authored comes back verbatim.
+      But custom normals are frozen data - they are **not** recomputed when the
+      vertices move, so the first proportional-edit stroke makes a smooth
+      surface shade as sharp triangles that have nothing to do with its shape.
+      That is the "normals explode when I edit" bug, and it is a property of
+      the custom-normal layer, not of these meshes.
+
+    The two look nearly the same: over the Reventon's LOD A the file's normals
+    sit a median 0.6 deg away from the geometric ones (p90 5.5 deg), because
+    RR3 already splits vertices at every hard edge and shares them everywhere
+    else - which is exactly what smooth shading infers from the topology.
     """
     nrm_mat = None
     if matrix is not None:
@@ -335,7 +355,7 @@ def _build_mesh_object(md, scale: float, convert: bool, coll, offset=(0.0, 0.0, 
     me.validate(verbose=False)
     me.update()
 
-    if md.normals and len(md.normals) == len(verts):
+    if file_normals and md.normals and len(md.normals) == len(verts):
         try:
             if nrm_mat is not None:
                 # normalise BEFORE the tuple() - a tuple has no .normalized(),
@@ -354,6 +374,13 @@ def _build_mesh_object(md, scale: float, convert: bool, coll, offset=(0.0, 0.0, 
             # either: a silent failure here is exactly how the wheels lost
             # their normals on 2026-10-28.
             print(f"warning: {md.name}: custom normals dropped ({exc})")
+    elif len(me.polygons):
+        # No custom normals: shade smooth so the import does not come in
+        # faceted.  Hard edges survive without help - a hard edge in an RR3
+        # mesh is literally two vertices in the same place, so smoothing can
+        # never average across it.
+        me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
+        me.update()
 
     if md.uvs and len(md.uvs) == len(verts):
         uvs = geometrylib.blender_uvs(md.uvs)
@@ -1239,6 +1266,7 @@ def import_m3g_file(
     spread_step: float = 0.6,
     textures: bool = True,
     collection=None,
+    file_normals: bool = False,
 ):
     m = m3glib.M3G(filepath)
     stem = os.path.splitext(os.path.basename(filepath))[0]
@@ -1252,7 +1280,8 @@ def import_m3g_file(
     meshes = geometrylib.all_meshes(m)
     for i, md in enumerate(meshes):
         off = (i * spread_step, 0.0, 0.0) if spread_parts else (0.0, 0.0, 0.0)
-        objs.append(_build_mesh_object(md, scale, convert_axes, coll, off, images))
+        objs.append(_build_mesh_object(md, scale, convert_axes, coll, off, images,
+                                      file_normals=file_normals))
 
     anchor_info = None
     if import_anchors:
@@ -1498,6 +1527,8 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
                         material_depot: str = "",
                         separate_damage: bool = True,
                         separate_camera: bool = True,
+                        blur_wheels: bool = True,
+                        file_normals: bool = False,
                         parent_collection=None):
     """Import one car with its wheels mounted and its active-aero parts rigged.
 
@@ -1565,6 +1596,23 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
     camera, and inside the real body they only z-fight.  They land in
     ``<car>_LOD<X>_camera``.
 
+    ``blur_wheels`` imports the motion-blur stand-in of each wheel - what the
+    engine swaps in once a wheel spins fast enough that its spokes would
+    strobe.  A wheel ships **two** meshes for it (the rim-and-tyre silhouette
+    plus a flatter sheet over it), modelled in the rim's own frame, so each one
+    hangs off the same ``WHEEL_<corner>`` pivot as the rim it replaces: it
+    follows the steering and the size.  A pre-assembled LOD (F) gets its blur
+    at the origin like its wheel, because that mesh already spans both sides of
+    the car.  They land in ``<car>_LOD<X>_blur``, which starts **hidden in the
+    viewport and in the render** - left visible they would only double the
+    wheel and z-fight with it - and one click in the outliner brings them back.
+
+    ``file_normals`` is ``False`` by default, the opposite of what this add-on
+    used to do; :func:`_build_mesh_object` explains why (custom split normals
+    do not follow the geometry, so the first proportional-edit stroke turns a
+    smooth panel into sharp triangles).  Turn it on to bake the game's own
+    normals when the model is going straight back out again.
+
     ``materials`` picks how the meshes are shaded.  ``"simple"`` is the old
     behaviour: a colour hashed from the material name plus the tag's atlas.
     ``"game"`` reads the game's own data instead - the livery table says which
@@ -1622,7 +1670,7 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
 
     body = import_m3g_file(plan.body_file, convert_axes=convert_axes,
                            import_anchors=False, textures=textures,
-                           collection=coll)
+                           collection=coll, file_normals=file_normals)
     body_objs = {md.name: ob for md, ob in zip(body["meshes"], body["objects"])}
 
     # Wrecked panels (``*_DAMAGE``) and smashed glass / lenses (``*_BROKEN``)
@@ -1644,6 +1692,20 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
     camera_coll = None
     if separate_camera and not standalone:
         camera_coll = _collection(f"{car}_LOD{lod}_camera", coll)
+
+    # The motion-blur stand-in of the wheels.  The engine stops drawing the rim
+    # and swaps in these two meshes once a wheel spins fast enough that its
+    # spokes would strobe.  They are modelled at the wheel's own origin, in the
+    # same place as the rim, so importing them *visible* only doubles the wheel
+    # and z-fights with it: they go into a folder of their own, hidden in the
+    # viewport and in the render, and are one click away when they are wanted.
+    blur_coll = None
+    if blur_wheels and (plan.wheels.front_blur_meshes
+                        or plan.wheels.rear_blur_meshes):
+        blur_coll = _collection(f"{car}_LOD{lod}_blur", coll)
+        blur_coll.hide_viewport = True
+        blur_coll.hide_render = True
+        blur_coll["rr3_blur"] = True
 
     for ob in body["objects"]:
         for c in list(ob.users_collection):
@@ -1684,6 +1746,7 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
 
     created = []
     wheel_objects = []
+    blur_objects = []
 
     for ob in body["objects"]:
         attach(ob)
@@ -1726,7 +1789,8 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
             if md is None:
                 continue
             ob = _build_mesh_object(md, 1.0, convert_axes, coll,
-                                    (0.0, 0.0, 0.0), images)
+                                    (0.0, 0.0, 0.0), images,
+                                    file_normals=file_normals)
             ob.parent = wheel_root
             ob.matrix_parent_inverse = Matrix.Identity(4)
             ob["rr3_wheel"] = mesh_name
@@ -1734,6 +1798,28 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
             wheel_objects.append(ob)
         print(f"{car} LOD {lod}: wheels are pre-assembled in the shared file "
               f"({len(wheel_objects)} mesh(es) at the origin, not rescaled)")
+        # The blur stand-in is pre-assembled too at this LOD: one mesh spanning
+        # both sides of the car, in car space.  Same rule as the wheel above -
+        # at the origin, no scale, no anchor.
+        if blur_coll is not None:
+            seen = set()
+            for mesh_name in (*plan.wheels.front_blur_meshes,
+                              *plan.wheels.rear_blur_meshes):
+                if mesh_name in seen:
+                    continue
+                seen.add(mesh_name)
+                md = by_name.get(mesh_name)
+                if md is None:
+                    continue
+                ob = _build_mesh_object(md, 1.0, convert_axes, blur_coll,
+                                        (0.0, 0.0, 0.0), images,
+                                        file_normals=file_normals)
+                ob.parent = wheel_root
+                ob.matrix_parent_inverse = Matrix.Identity(4)
+                ob["rr3_wheel"] = mesh_name
+                ob["rr3_wheel_blur"] = True
+                ob["rr3_pre_assembled"] = True
+                blur_objects.append(ob)
     elif plan.shared_file and plan.wheels.front_wheel:
         shared = m3glib.M3G(plan.shared_file)
         by_name = {md.name: md for md in geometrylib.all_meshes(shared)}
@@ -1814,7 +1900,8 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
                 # own frame, with x = 0 on its outer face and y/z centred, and
                 # that outer face is exactly where the point sits.
                 ob = _build_mesh_object(md, 1.0, convert_axes, coll,
-                                        (0.0, 0.0, 0.0), images, matrix=mat)
+                                        (0.0, 0.0, 0.0), images, matrix=mat,
+                                        file_normals=file_normals)
                 ob.name = f"{mount.corner}_{mesh_name}"
                 ob.parent = pivot
                 ob.matrix_parent_inverse = Matrix.Identity(4)
@@ -1831,6 +1918,36 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
                 if w != 1.0:
                     ob["rr3_tyre_widen"] = w
                 wheel_objects.append(ob)
+
+            # The spinning stand-in of this corner: two meshes - the rim/tyre
+            # silhouette and a flatter sheet over it - modelled in the same
+            # frame as the rim (x = 0 on the outer face), so they hang off the
+            # same pivot with the same turn and the same radial scale.  They
+            # replace the wheel when it blurs, so they follow the wheel's
+            # steering, its bank and its size; only the width is left alone,
+            # since the blur is a silhouette and widening it would put a skirt
+            # around the tyre.
+            if blur_coll is not None:
+                bmat = None
+                if mount.corner.endswith("R"):
+                    bmat = Matrix.Rotation(math.pi, 4, "Y")
+                for mesh_name in (plan.wheels.rear_blur_meshes if rear
+                                  else plan.wheels.front_blur_meshes):
+                    md = by_name.get(mesh_name)
+                    if md is None:
+                        continue
+                    ob = _build_mesh_object(md, 1.0, convert_axes, blur_coll,
+                                            (0.0, 0.0, 0.0), images, matrix=bmat,
+                                            file_normals=file_normals)
+                    ob.name = f"{mount.corner}_{mesh_name}"
+                    ob.parent = pivot
+                    ob.matrix_parent_inverse = Matrix.Identity(4)
+                    if abs(k - 1.0) > 1e-6:
+                        ob.scale = (k, k, k) if wheel_uniform else (1.0, k, k)
+                    ob["rr3_wheel"] = mesh_name
+                    ob["rr3_wheel_blur"] = True
+                    ob["rr3_wheel_scale"] = k
+                    blur_objects.append(ob)
 
     if plan.steering is not None:
         steer_piv = bpy.data.objects.new("STEERING_WHEEL", None)
@@ -2003,6 +2120,7 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
         "body": body,
         "collection": coll,
         "wheels": wheel_objects,
+        "blur": blur_objects,
         "empties": created,
         "aero": aero_objects,
         "anchors": anchors,
@@ -2266,6 +2384,13 @@ class IMPORT_OT_rr3_m3g(Operator, ImportHelper):
         description="Decode the <car>_<tag>.dxt.dds.z atlases next to the model and bind them to the _mm_<tag> materials",
         default=True,
     )
+    file_normals: BoolProperty(
+        name="Normals from the file",
+        description="Bake the normals the .m3g stores as custom split normals. "
+                    "Exact game shading, but frozen - deforming the mesh then "
+                    "shades as sharp triangles. Off lets Blender compute them",
+        default=False,
+    )
 
     def execute(self, context):
         try:
@@ -2277,6 +2402,7 @@ class IMPORT_OT_rr3_m3g(Operator, ImportHelper):
                 spread_parts=self.spread_parts,
                 spread_step=self.spread_step,
                 textures=self.textures,
+                file_normals=self.file_normals,
             )
         except Exception as exc:  # noqa: BLE001
             self.report({"ERROR"}, f"RR3 import failed: {exc}")
@@ -2999,6 +3125,22 @@ class IMPORT_OT_rr3_vehicle(Operator, ImportHelper):
                     "the emissive LIT_* glow quads. Inside the real body they "
                     "only z-fight, so they go into '<car>_LOD<X>_camera'",
     )
+    blur_wheels: BoolProperty(
+        name="Motion-blur wheels", default=True,
+        description="Import the two meshes each wheel spins as when it blurs - "
+                    "the silhouette and a flatter sheet over it - into a "
+                    "'<car>_LOD<X>_blur' sub-collection that starts hidden in the "
+                    "viewport and in the render. Left visible they only double "
+                    "the wheel and z-fight with it",
+    )
+    file_normals: BoolProperty(
+        name="Normals from the file", default=False,
+        description="Bake the normals the .m3g stores as custom split normals. "
+                    "Exact game shading, but frozen: proportional editing, "
+                    "sculpting and any deformation then shade as sharp "
+                    "triangles. Off lets Blender compute them - the same shading "
+                    "to within a degree, and editing stays correct",
+    )
     material_depot: StringProperty(
         name="Depot", default="", subtype="DIR_PATH",
         description="Folder holding materials/materials.bin. Leave empty to look "
@@ -3033,6 +3175,8 @@ class IMPORT_OT_rr3_vehicle(Operator, ImportHelper):
             if self.material_depot else "",
             separate_damage=self.separate_damage,
             separate_camera=self.separate_camera,
+            blur_wheels=self.blur_wheels,
+            file_normals=self.file_normals,
         )
 
         try:
@@ -3046,6 +3190,9 @@ class IMPORT_OT_rr3_vehicle(Operator, ImportHelper):
                f"{len(plan.wheel_mounts)} wheels, {len(plan.aero_parts)} aero parts")
         if res["wheels"]:
             msg += f", {len(res['wheels'])} wheel objects"
+        if res.get("blur"):
+            msg += (f", {len(res['blur'])} blur meshes in "
+                    f"{car}_LOD{lod or self.lod}_blur (hidden)")
         if plan.aero_parts:
             msg += f", {len(plan.aero_parts)} pivots keyframed"
         fit = res.get("wheel_fit")
@@ -3539,6 +3686,67 @@ class RR3_OT_switch_paint(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RR3_OT_clear_custom_normals(bpy.types.Operator):
+    """Drop the normals baked from the file so the shading follows the shape
+
+    An .m3g stores one normal per vertex, and importing them as *custom split
+    normals* reproduces the game's shading exactly - but custom normals are
+    frozen data.  Move a few vertices with proportional editing and the stored
+    normals stay where they were, so a smooth panel starts shading as sharp
+    triangles that do not match its surface.  This clears the layer and shades
+    smooth, after which Blender recomputes the normals as the mesh deforms.
+
+    Hard edges survive: in an RR3 mesh a hard edge is two vertices in the same
+    place, not a flag, so smoothing cannot average across it.  Measured over
+    LOD A of the Reventon, the file's normals sit a median 0.6 deg from the
+    geometric ones.
+    """
+
+    bl_idname = "rr3.clear_custom_normals"
+    bl_label = "Make Normals Editable"
+    bl_options = {"REGISTER", "UNDO"}
+
+    selected_only: BoolProperty(
+        name="Selected objects only", default=False,
+        description="Fix only the selected meshes instead of every mesh object "
+                    "in the view layer",
+    )
+
+    def execute(self, context):
+        objs = [ob for ob in context.view_layer.objects
+                if ob.type == "MESH"
+                and (not self.selected_only or ob.select_get())]
+        if not objs:
+            self.report({"WARNING"}, "no mesh objects to fix")
+            return {"CANCELLED"}
+        cleared = 0
+        smoothed = 0
+        skipped = []
+        for ob in objs:
+            me = ob.data
+            if getattr(me, "has_custom_normals", False):
+                try:
+                    with context.temp_override(object=ob, active_object=ob,
+                                               selected_objects=[ob],
+                                               selected_editable_objects=[ob]):
+                        bpy.ops.mesh.customdata_custom_splitnormals_clear()
+                    cleared += 1
+                except Exception as exc:  # noqa: BLE001 - report, keep going
+                    skipped.append(f"{ob.name}: {exc}")
+                    continue
+            # Never leave a mesh flat: an import that came in flat would then
+            # look worse after "fix the normals" than before it.
+            if len(me.polygons) and not all(p.use_smooth for p in me.polygons):
+                me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
+                me.update()
+                smoothed += 1
+        msg = f"{len(objs)} mesh(es): {cleared} had file normals, {smoothed} shaded smooth"
+        if skipped:
+            self.report({"WARNING"}, "; ".join(skipped[:3]))
+        self.report({"INFO"}, msg)
+        return {"FINISHED"}
+
+
 class RR3_OT_catalog(bpy.types.Operator):
     bl_idname = "rr3.catalog"
     bl_label = "Material / Part Catalog"
@@ -3824,6 +4032,8 @@ class RR3_PT_panel(bpy.types.Panel):
         col.operator("rr3.set_part_material", text="Set part material", icon="MATERIAL")
         col.operator("rr3.switch_paint", text="Switch paint scheme", icon="COLOR")
         col.operator("rr3.audit_paint", text="Audit part materials", icon="VIEWZOOM")
+        col.operator("rr3.clear_custom_normals", text="Make normals editable",
+                     icon="NORMALS_FACE")
 
         box = layout.box()
         box.label(text="Reference", icon="INFO")
@@ -3853,7 +4063,8 @@ class RR3_PT_panel(bpy.types.Panel):
 class EXPORT_OT_rr3_m3g(bpy.types.Operator, ExportHelper):
     bl_idname = "export_scene.rr3_m3g"
     bl_label = "Export RR3 Model (.m3g)"
-    bl_description = "Write the selected mesh objects (or all meshes) as a Real Racing 3 .m3g"
+    bl_description = ("Write the selected mesh objects (or all meshes, leaving out "
+                      "the hidden motion-blur stand-ins) as a Real Racing 3 .m3g")
     bl_options = {"REGISTER"}
 
     filename_ext = ".m3g"
@@ -3892,9 +4103,19 @@ class EXPORT_OT_rr3_m3g(bpy.types.Operator, ExportHelper):
     def execute(self, context):
         try:
             from . import m3gexport
-            objs = [o for o in context.scene.objects if o.type == "MESH"] \
-                if self.all_objects else ([o for o in context.selected_objects if o.type == "MESH"] \
-                                          or [o for o in context.scene.objects if o.type == "MESH"])
+            # The motion-blur stand-ins are not part of the car: they are a
+            # second copy of the wheels in the same place.  "Export all meshes"
+            # must not sweep them into LOD_A.m3g - selecting them by hand still
+            # exports them, because that is a deliberate act.
+            def _bodies(seq):
+                return [o for o in seq
+                        if o.type == "MESH" and not o.get("rr3_wheel_blur")]
+
+            if self.all_objects:
+                objs = _bodies(context.scene.objects)
+            else:
+                objs = ([o for o in context.selected_objects if o.type == "MESH"]
+                        or _bodies(context.scene.objects))
             mixed = _lod_mixture(objs)
             if mixed:
                 self.report({"ERROR"},
@@ -4017,6 +4238,7 @@ classes = (
     RR3_OT_switch_paint,
     RR3_OT_audit_paint,
     RR3_OT_catalog,
+    RR3_OT_clear_custom_normals,
     # reports and panel
     RR3_OT_report_to_text,
     RR3_OT_export_textures,

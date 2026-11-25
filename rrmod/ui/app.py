@@ -1,9 +1,16 @@
-"""The main window: pick an install, then work in one of four tabs.
+"""The main window: pick an install, then work in the tabs that copy shows.
 
 The first thing the program does is ask where the game is - nothing else works
 until that is answered, and the answer is remembered.  After that the window is a
 plain tabbed shell; every tab is independent and reads from the same
 :class:`rrmod.depot.Inventory`.
+
+How many tabs there are is not fixed here: :mod:`rrmod.profile` owns that list.
+There are eleven pages in all (Cars, Music, Graphics, Career, Brands, Materials,
+Dependencies, Decals, Publish, Test, About); the studio copy shows eight of them,
+the manager copy seven, and ``--all`` shows every one.  This docstring said
+"four" long after the fourth page was added, which is the kind of thing a reader
+trusts.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 > **English** — A toolkit for the Real Racing 3 asset format. Readers and
 > writers for `.m3g` models, `.points` anchors, `.banim` animations and the six
-> shared `.nct` tables; a Blender add-on (19 operators, `N` panel) that imports
+> shared `.nct` tables; a Blender add-on (20 operators, `N` panel) that imports
 > and exports a whole car; and a desktop manager that builds a car into a
 > playable installation and deploys it over adb. Written against Build 260716,
 > Python 3.12 + PySide6, Blender 4.5.
@@ -18,7 +18,7 @@
 可读可写：解析 `.m3g` / `.points` / `.banim` / `.nct` 六张共享表，也能反向写出模型、锚点、动画片段，
 并一次性造出一台能装进游戏的整车（spec + 四张共享表 + 涂装表 + 车目录 + 资源清单）。
 
-Blender 插件现在注册 **19 个 operator**（7 个导入、4 个导出、2 个贴图、4 个车辆/材质、1 个目录、1 个报告）
+Blender 插件现在注册 **20 个 operator**（7 个导入、4 个导出、2 个贴图、4 个车辆/材质、1 个目录、1 个报告、1 个法向修复）
 加 1 个面板，面板在 3D 视图的 `N` → `RR3` 页（18 个按钮），菜单在 `File → Import / Export`。
 读写全在内存里完成，不改源文件；只有主动执行导出/造车才会写出新文件。
 
@@ -31,7 +31,7 @@ Blender 插件现在注册 **19 个 operator**（7 个导入、4 个导出、2 �
 ```
 rr3_blender_addon.zip      ← Blender 插件包（直接“安装…”用，不要解压）
 rr3_blender_addon/         ← 插件源码目录
-  __init__.py              ← 19 个 operator + N 面板（151 KB）
+  __init__.py              ← 20 个 operator + N 面板
   rr3_export.py            ← Blender → .points / .banim / _animations.xml
   m3gexport.py             ← Blender → .m3g（模板继承 + 定点顶点）
   README.md                ← ★ 插件参数手册（11 章，全部参数表 + 格式速查）

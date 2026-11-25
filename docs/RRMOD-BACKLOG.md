@@ -52,8 +52,28 @@ livery choice, PR + stats, class and tier, and the series placement that
 - [ ] **[bug]** The upper half of the ride-height slider prints one millimetre
       less than it is stored as, sometimes. Five readings, no single rule fits:
       0.010 -> +10, 0.015 -> +15, 0.180 -> +180, 0.005 -> +5/+4, 0.025 -> **+24**.
-      The down half is exact. Next step: change only f23/f24, leave the tyre
-      alone, and see whether the diameter is the second variable.
+      The down half is exact.
+
+      **DEFERRED 2026-11-25** - the user asked to leave this for later ("记下来，
+      晚点再做"), so it is parked here, not forgotten.  The down half, the
+      write path and the display of a shipped car are all correct; this is the
+      readout of a hand-typed up value.
+
+      The experiment that closes it, in order:
+
+      1. Take one car, change **only** `f23/f24` (up travel), leave `f21/f22`
+         (tyre diameter) and the appearance block alone. Sweep 0.005 / 0.010 /
+         0.015 / 0.025 / 0.180 and read the screen after each.
+      2. If the screen now tracks the float exactly, the second variable was the
+         tyre: log the diameter next to each reading and fit
+         `screen = f(travel, diameter)`.
+      3. If it still disagrees, the readout is not `int(f32 * 1000)` of this
+         field alone - look for a second consumer of `f23/f24` (the workspace
+         `suspensiondata` copy is synced per edit, so a stale hash would show
+         the *old* number, which matches "one off" only by coincidence).
+
+      Tool: `work/_silvia_range.py [up] [down]` already does the write + print,
+      and `work/_push_silvia.py` pushes the table; both are gitignored.
 
 - [x] **[feat]** Finish the field list, then re-review.
       **DONE 2026-11-06 - appearance id, model token and the donor-alias switch are
@@ -1680,3 +1700,56 @@ Tests: 1341 -> **1406** (groups 84-86: the slot tables and the colour word, the
 three writers, and the shared-page naming). `work/_ui_smoke.py`: 72 -> **104**
 (the two tables, the `...` panel, the new-scheme dialog, the car's Textures tab,
 and the label-driven add). i18n: 22 new Chinese strings, missing back to zero.
+
+## Round J: the wheels the importer never brought in, and normals that would not bend
+
+Two things the importer left behind, both found by using it rather than reading
+it.
+
+### The motion-blur stand-in of every wheel was missing
+
+- [x] **A wheel ships two blur meshes, not one.** Measured on the Reventon, the
+  LFA and the Countach: `LOD_x_WHEEL_BLUR_mm_wheel` (the silhouette, 684 verts)
+  and `LOD_x_WHEEL_BLUR_mm_wheel_blur` (a flatter sheet over it, 361 verts), with
+  a separate pair under `..._WHEEL_REAR_BLUR_...` on cars whose rear wheel
+  differs. `parts.WheelSet` knew the first one's name and the importer ignored
+  every one of them, so a spinning car had no blur at all.
+- [x] **They go where the rim goes.** Both are modelled in the rim's frame
+  (`x = 0` on the outer face), so each hangs off the same `WHEEL_<corner>` pivot,
+  takes the same half turn on the right side, and takes the same radial scale.
+  LOD F's blur is the whole car already assembled (x spans +-1.04), so that one
+  goes to the origin under `WHEEL_LODF_ASSEMBLED` and is not rescaled - exactly
+  the rule its wheel already followed.
+- [x] **`<car>_LOD<X>_blur`, hidden in the viewport and in the render.** Left
+  visible they only double the wheel and z-fight with it. `rr3_wheel_blur = True`
+  marks them, and *Export all meshes* now skips them - selecting one by hand
+  still exports it.
+- [x] `parts._blur_names()` returns the whole list (sorted, so the order is
+  stable); `front_wheel_blur` / `rear_wheel_blur` stay as the first name for the
+  report and the older tests.
+
+### Normals: baked on the way in, frozen ever after
+
+- [x] **The cause of "proportional editing makes sharp triangles".** Import used
+  to bake the file's per-vertex normals as *custom split normals*. Those are
+  frozen data: move a vertex and the normals keep pointing where they did, so
+  the surface shades as facets that do not match its shape while the rest of the
+  panel looks fine.
+- [x] **Measured, not guessed.** Chiron body shell, 3921 manifold edges, six
+  neighbouring vertices pulled 0.25 m: baked normals leave **4 edges with a
+  normal discontinuity over 10 deg, worst 58.86 deg**; computed normals leave
+  **0, worst 0.04 deg**.
+- [x] **`file_normals` is off by default.** Import now sets `shade smooth` and
+  lets Blender recompute. Hard edges survive because an RR3 hard edge is two
+  vertices in the same place, not a flag. The look barely moves: over LOD A of
+  the Reventon the file's normals sit a median **0.6 deg** from the geometric
+  ones (p90 5.5 deg), and the authored outliers are real (brakes 7.6 deg median,
+  steering wheel 4.5 deg) - turning `file_normals` on brings those back.
+- [x] **`rr3.clear_custom_normals`** (*Car ▸ Make normals editable*) repairs a
+  scene that was imported before this, without re-importing.
+
+Docs: `rr3_blender_addon/README.md` (two new parameter rows, two long notes, the
+new operator), `docs/插件使用手册.md` (task A gains the three sub-collections and
+the normals note; five rows in the troubleshooting table). Tests: smoke 20 -> 22
+steps (the blur folder with its 8 meshes and their pivots; normals editable by
+default and still bakable, plus the repair operator). Operators: 19 -> 20.

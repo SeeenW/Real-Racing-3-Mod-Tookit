@@ -85,6 +85,7 @@
 | | Set part material | `rr3.set_part_material` |
 | | Switch paint scheme | `rr3.switch_paint` |
 | | Audit part materials | `rr3.audit_paint` |
+| | Make normals editable | `rr3.clear_custom_normals` |
 | Reference | Material / part catalog | `rr3.catalog` |
 | | File report | `rr3.report_to_text` |
 
@@ -141,6 +142,8 @@
 | `material_depot` | 空 | 装 `materials/materials.bin` 的目录。留空则从车目录向上找 8 层；车被拷出 depot 时填这里 |
 | `separate_damage` | 开 | 把 `*_DAMAGE` / `*_BROKEN_*` 损伤件放进 `<车名>_LOD<X>_damaged` 子集合 |
 | `separate_camera` | 开 | 把 `BONNETCAM_*` 车头视角壳和 `LIT_*_GLOW` 发光片放进 `<车名>_LOD<X>_camera` 子集合 |
+| `blur_wheels` | 开 | 把每个轮子的**动态模糊替身**（两个网格）放进 `<车名>_LOD<X>_blur` 子集合，**视口和渲染里都默认隐藏** |
+| `file_normals` | **关** | 关＝法向由几何实时算（可编辑，推荐）；开＝把 `.m3g` 里的法向烘成自定义拆边法向（还原度最高，但一变形就花） |
 
 > **装配顺序**：整车导入是"**先导 points，再按 points 位置装轮子**"。
 > `WHEEL_*` 枢轴直接取对应 `ANCHOR_POINT_WHEEL_*` 的位置，轮网格挂在枢轴下、
@@ -181,6 +184,38 @@
 > 和 `LOD_A_LIT_*_GLOW`（面向相机的发光片）。它们进 `<车名>_LOD<X>_camera`，
 > 对象带 `rr3_camera = True`。注意车身文件里 375/463 台也有 `BONNETCAM`，但都是
 > `BONNETCAM_HOOD_DAMAGE_*`，已经被损伤集合收走了。
+
+> **动态模糊轮毂**（`blur_wheels`）：轮子转得快到辐条会"频闪"时，引擎不再画轮辋，
+> 换成 `_shared.m3g` 里的**两个**替身网格——轮廓（`..._BLUR_mm_wheel`）和盖在上面的一层
+> 薄片（`..._BLUR_mm_wheel_blur`）。实测（Reventon / LFA / Countach 三台一致）前轮
+> 684 + 361 个顶点、后轮另有一套 `..._WHEEL_REAR_BLUR_*`。它们和轮辋**同一个坐标系**
+> （`x = 0` 就是外侧面），所以插件把它们挂在**同一个 `WHEEL_<角标>` 枢轴**下，跟着转向、
+> 跟着径向缩放（`scale = (1, k, k)`）；宽度不拉，因为它只是剪影。
+>
+> 它们进 `<车名>_LOD<X>_blur`，**视口和渲染里都默认隐藏**——和轮子完全重合，留着只会
+> 双重渲染、z-fighting。想看就在大纲里把那个集合的眼睛点开（渲染隐藏是单独的开关）。
+> 对象带 `rr3_wheel_blur = True`。
+>
+> LOD F 的模糊网格和它的轮子一样是**整车预装配**（`x` 跨 ±1.04），所以走原点、不缩放，
+> 挂在 `WHEEL_LODF_ASSEMBLED` 下。**导出**时"Export all meshes"会跳过带 `rr3_wheel_blur`
+> 的对象（否则它们会被写进 `LOD_A.m3g`）；手动选中它们则会照常导出。
+
+> **法向与"衰减编辑一拉就出锐利三角面"**（`file_normals`）：`.m3g` 每个顶点存一个法向。
+> 以前插件把它 `normals_split_custom_set_from_vertices` 成**自定义拆边法向**——画面和游戏
+> 一模一样，但那是一层**冻结的数据**：顶点移动之后法向不会跟着重算，于是表面被拉过的地方
+> 亮暗和形状对不上，看起来就是"锐利的三角面"，没拉过的地方仍然正常。
+>
+> 实测（Chiron 车身壳 3921 条内部边，拉 6 个相邻顶点 0.25 m）：
+> 烘焙法向 → **4 条边的法向夹角超过 10°，最坏 58.9°**；不烘焙 → **0 条，最坏 0.04°**。
+>
+> 所以 `file_normals` **默认关**：改为 `shade smooth` + 让 Blender 按几何实时算。
+> 硬边不会丢——RR3 的硬边就是**同一个位置上两个顶点**，不是标记，平滑永远跨不过去。
+> 两种做法的观感差别很小：Reventon LOD A 全车统计，文件法向与几何法向夹角中位 **0.6°**、
+> p90 **5.5°**。
+>
+> 已经导入的场景不用重新导：选中对象 → `N` 面板 → Car ▸ **Make normals editable**
+> （`rr3.clear_custom_normals`），会把自定义法向清掉并改成平滑着色。
+> 真要还原游戏原样再导出时，再把 `file_normals` 勾上。
 
 > **为什么需要 `wheel_size`**：游戏里的轮子网格是**一个 0.60 m 的通用模板**，每台车加载时
 > 按自己的轮胎直径径向拉伸（只拉 y/z，宽度不动）。全库 463 台车的模板半径变异系数只有

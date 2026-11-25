@@ -152,6 +152,14 @@ class WheelSet:
     rear_tyre: str | None = None
     front_wheel_blur: str | None = None
     rear_wheel_blur: str | None = None
+    #: Every ``*_BLUR_*`` mesh of this LOD, per axle.  A wheel ships **two** of
+    #: them: the rim-and-tyre silhouette (``..._BLUR_mm_wheel``) and a second,
+    #: flatter sheet (``..._BLUR_mm_wheel_blur``).  Measured on the Reventon,
+    #: LFA and Countach: 684 + 361 vertices for the front, 684 + 361 for the
+    #: rear.  :attr:`front_wheel_blur` is the first of these, kept because the
+    #: report and the older tests name one mesh.
+    front_blur_meshes: tuple[str, ...] = ()
+    rear_blur_meshes: tuple[str, ...] = ()
     #: Brake disc; ``rotor_rear`` is the same mesh unless the car has a wider
     #: one of its own (31 cars).  The disc turns with the wheel.
     rotor: str | None = None
@@ -328,6 +336,9 @@ def wheel_set(shared_m3g_path, lod="A"):
             ws.calipers[corner] = roles[role]
     ws.front_wheel_blur = _blur_name(model, lod, "WHEEL")
     ws.rear_wheel_blur = _blur_name(model, lod, "WHEEL_REAR") or ws.front_wheel_blur
+    ws.front_blur_meshes = _blur_names(model, lod, "WHEEL")
+    ws.rear_blur_meshes = (_blur_names(model, lod, "WHEEL_REAR")
+                           or ws.front_blur_meshes)
     # A pre-assembled LOD F wheel spans both sides of the car in one mesh.
     for cand in (ws.front_wheel, ws.front_tyre):
         span = widths.get(cand) if cand else None
@@ -345,6 +356,26 @@ def _blur_name(model, lod, stem):
         if name.split("_mm_")[0] == want:
             return name
     return None
+
+
+def _blur_names(model, lod, stem):
+    """Every ``*_BLUR_*`` mesh of one LOD, sorted so the order is stable.
+
+    A spinning wheel is drawn by **two** meshes, not one: the silhouette
+    (``..._BLUR_mm_wheel``) and a flatter sheet over it
+    (``..._BLUR_mm_wheel_blur``).  Matching the base name - everything before
+    ``_mm_`` - catches both whatever tag each happens to carry, which is why
+    this cannot be a single-name lookup.  Importing only the first one, as the
+    add-on used to by ignoring them altogether, leaves the blur looking like a
+    half-built wheel.
+    """
+    want = f"LOD_{lod}_{stem}_BLUR"
+    out = []
+    for obj in model.of_type(14):
+        name = obj.data.get("name") or ""
+        if name.split("_mm_")[0] == want:
+            out.append(name)
+    return tuple(sorted(out))
 
 
 # ----------------------------------------------------------------------- aero parts

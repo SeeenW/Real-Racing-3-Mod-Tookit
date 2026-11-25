@@ -8,53 +8,12 @@ in ``vehicles/data``, the two shared livery tables and the manifests.  That is
 enough for every code path that writes, and it means the test never touches the
 real depot.
 
-Checks, in order:
-
- 1  scan finds the car and calls it unmanaged
- 2  bootstrap writes ``rr3mods.json`` and the car becomes vanilla
- 3  verify is clean on an untouched install
- 4  replace_file rewrites the LOD and both manifests
- 5  add_file appends a row to the per car manifest
- 6  set_wing_paint fills slot 745 from slot 30 and syncs the livery table
- 7  one edit leaves exactly one backup folder, and restoring it works
- 8  install_pack builds a new car (spec, appearance, tables, folder, manifests)
- 9  the new car verifies clean, and a second install of it is refused
-10  remove_car takes the car out again and leaves the install verifying clean
-11  the music editor round trips a playlist byte for byte
- 12  the music batch helpers plan edits without touching anything
- 13  deploy builds the right remote paths and reads a logcat trace
- 14  a new file changes a car's fingerprint
- 15  the graphics profiles plan, write and round trip
- 16  the animation tracks read, swap and rebuild byte for byte
- 17  the clip list parses, edits and writes back
- 18  copying one car's animation onto another
- 19  a stale table that would drop a car is refused before it is pushed
- 20  the career file reads, edits and writes back byte for byte
- 21  a career file that would drop a device series is refused
- 22  no UI code reads a Qt enum member off an instance, and the windows build
- 23  the interface speaks two languages and the Chinese table is complete
- 24  the car and track pickers read the game's own atlases
- 25  a picture becomes a menu card in every screen size
- 26  a share zip exports, validates and imports, and refuses what it cannot do
- 27  a career read off a device lands where the readers look for it
- 28  the worker registry stops background jobs before the window goes away
- 29  an existing series can have its event list rebuilt
- 30  the data files the frozen build needs are shipped and loadable
- 31  adb can be pointed at a device by hand
- 32  every editor writes to a working copy, never to the install
- 33  every wing behaviour can be read and written
- 34  the other GPU texture families decode against the DXT copy of the same art
- 35  the manufacturers, their logo art and their display names
- 36  the track map pictures the user brings
- 37  the paint finishes the game itself offers
- 38  painting a car a different finish
- 39  the picture beside the name, and the window icon
- 40  the build tools never delete a build they cannot move
-41  a folder of exported files fills the slots the game has, with no car.json
-42  a slot table replaces files in an existing car under the names the game wants
-43  the parts' materials resolve, and the library only lists writable ones
-44  one paint scheme can have its own finish, and its own atlas
-45  the Paints and Parts panes show a car and write through the same helpers
+Each check belongs to a numbered group, and the group prints its own title as it
+starts - that run is the index, and it cannot go stale the way a hand-written
+list does.  (The list that used to sit here had grown to 45 entries while the
+file held 96 groups.)  A group is a paragraph of ``print("NN what it proves")``
+followed by ``check(name, condition)`` calls; a failure names the check and the
+value that made it fail, and never stops the run.
 """
 
 from __future__ import annotations
