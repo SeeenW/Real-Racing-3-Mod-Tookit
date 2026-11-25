@@ -24,6 +24,7 @@ import re
 import shutil
 import sys
 import tempfile
+from array import array
 
 import bpy
 from bpy.props import (BoolProperty, BoolVectorProperty, CollectionProperty,
@@ -116,6 +117,100 @@ def _hex_color(name: str):
     return (r, g, b, 1.0)
 
 
+#: (image name, size) -> (uses_alpha, mean_alpha).  See :func:`_image_alpha`.
+_ALPHA_CACHE: dict = {}
+
+
+def _image_alpha(image):
+    """``(uses_alpha, mode)`` for an image, measured and cached.
+
+    Every atlas page in the depot is a 32-bit DDS (DXT5), so "four channels" says
+    nothing: `misc`, `lights` and `wheel` are 4-channel with an alpha of 1.0
+    everywhere.  What matters is whether the page *uses* alpha, and that has to
+    be read off the pixels - measured on the Chiron, `badges` runs 0.0..1.0 (a
+    cut-out) and `wheel_blur` 0.44..1.0 (the blur mask), while the other six
+    pages are flat 1.0.
+
+    ``mode`` is the transparency method that fits the data:
+
+    * ``DITHERED`` - the page has fully clear pixels (the Chiron's `badges` is
+      60 % clear, 26 % opaque, 14 % in between): a cut-out.  Dithering keeps it
+      z-buffer correct; a real blend would sort two overlapping badge quads
+      wrongly the moment they cross.
+    * ``BLENDED`` - nothing is fully clear, the alpha ramps (`wheel_blur` is 0 %
+      clear, 44 % in between): a soft mask, where dithering would show as noise.
+
+    Reading 1024x1024 pixels costs about 30 ms through ``foreach_get`` into a
+    preallocated array, and the answer is cached per image name + size, so an
+    import pays for it once per page rather than once per mesh.
+    """
+    cache_key = (image.name, image.size[0], image.size[1])
+    hit = _ALPHA_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
+    uses, mode = False, "DITHERED"
+    width, height = image.size
+    if getattr(image, "depth", 0) == 32 and width and height:
+        try:
+            buf = array("f", [0.0]) * (width * height * 4)
+            image.pixels.foreach_get(buf)
+            if min(buf[3::4]) < 0.99:
+                uses = True
+                # every 16th pixel is plenty to tell a cut-out from a gradient
+                sample = buf[3::64]
+                if sample:
+                    clear = sum(1 for a in sample if a < 0.02)
+                    mode = "DITHERED" if clear > 0.02 * len(sample) else "BLENDED"
+        except Exception as exc:  # noqa: BLE001 - never fail an import for this
+            print(f"warning: {image.name}: alpha not measured ({exc})")
+    _ALPHA_CACHE[cache_key] = (uses, mode)
+    return uses, mode
+
+
+def _wire_alpha(mat, tex, bsdf, image):
+    """Feed the page's own alpha into the shader, when the page has one.
+
+    Returns True when a link was made.  The blend mode follows the pixels, not
+    the material name - see :func:`_image_alpha`.
+    """
+    if image is None or tex is None or bsdf is None:
+        return False
+    uses, mode = _image_alpha(image)
+    if not uses:
+        return False
+    alpha_in = bsdf.inputs.get("Alpha")
+    if alpha_in is None:
+        return False
+    nt = mat.node_tree
+    if not any(link.from_socket == tex.outputs["Alpha"]
+               and link.to_socket == alpha_in for link in nt.links):
+        nt.links.new(tex.outputs["Alpha"], alpha_in)
+    _set_alpha_mode(mat, mode)
+    return True
+
+
+def _set_alpha_mode(mat, method):
+    """Ask for a transparency mode on whichever Blender is running.
+
+    EEVEE Next (4.2+) replaced ``blend_method`` with ``surface_render_method``,
+    which only knows DITHERED / BLENDED; older builds want HASHED / BLEND.  Both
+    are set best-effort - Cycles honours the Principled alpha either way, so a
+    failure here costs nothing but a sorted-transparency setting.
+    """
+    try:
+        mat.surface_render_method = method
+        return
+    except (AttributeError, TypeError):
+        pass
+    legacy = {"DITHERED": "HASHED", "BLENDED": "BLEND"}.get(method, method)
+    try:
+        mat.blend_method = legacy
+        if legacy != "OPAQUE":
+            mat.shadow_method = "HASHED"
+    except (AttributeError, TypeError):
+        pass
+
+
 def _get_material(name: str, image=None):
     mat = bpy.data.materials.get(name)
     if mat is None:
@@ -140,6 +235,7 @@ def _get_material(name: str, image=None):
         if tex is not None:
             tex.image = image
             tex.extension = "REPEAT"
+            _wire_alpha(mat, tex, bsdf, image)
     return mat
 
 
@@ -355,19 +451,35 @@ def _build_mesh_object(md, scale: float, convert: bool, coll, offset=(0.0, 0.0, 
     me.validate(verbose=False)
     me.update()
 
-    if file_normals and md.normals and len(md.normals) == len(verts):
+    normals = None
+    if md.normals and len(md.normals) == len(verts):
+        if nrm_mat is not None:
+            # normalise BEFORE the tuple() - a tuple has no .normalized(),
+            # and that AttributeError used to be swallowed by the except
+            # below, silently dropping the custom normals of every wheel
+            # that had a matrix (right side + widened rear tyre).
+            normals = [
+                _to_blender((nrm_mat @ Vector(n)).normalized(), convert)
+                for n in md.normals
+            ]
+        else:
+            normals = [_to_blender(nrm, convert) for nrm in md.normals]
+        # Keep the file's normals on the mesh as an ordinary attribute, whether
+        # or not they are baked as custom normals.  They are the only record of
+        # which coincident vertices were a *hard edge* (different normals) and
+        # which were only a UV seam (same normal); once the vertices are welded
+        # nothing else can tell them apart, and shading a panel after a weld is
+        # exactly what went wrong on 2026-11-25.  Costs 12 bytes a vertex and is
+        # ignored by the exporter.
         try:
-            if nrm_mat is not None:
-                # normalise BEFORE the tuple() - a tuple has no .normalized(),
-                # and that AttributeError used to be swallowed by the except
-                # below, silently dropping the custom normals of every wheel
-                # that had a matrix (right side + widened rear tyre).
-                normals = [
-                    _to_blender((nrm_mat @ Vector(n)).normalized(), convert)
-                    for n in md.normals
-                ]
-            else:
-                normals = [_to_blender(nrm, convert) for nrm in md.normals]
+            attr = me.attributes.new("rr3_normal", "FLOAT_VECTOR", "POINT")
+            for vi, n in enumerate(normals):
+                attr.data[vi].vector = n
+        except Exception as exc:  # noqa: BLE001 - never fatal
+            print(f"warning: {md.name}: file normals not kept ({exc})")
+
+    if file_normals and normals:
+        try:
             me.normals_split_custom_set_from_vertices(normals)
         except Exception as exc:  # noqa: BLE001 - normals are a nicety, never fatal
             # never fail the import for this, but never swallow it silently
@@ -999,8 +1111,12 @@ def _build_preset_material(name: str, presets, active: int = 0):
         if rm.coat is not None:
             _set_input(bsdf, "Coat Weight", 1.0)
             _set_input(bsdf, "Coat Roughness", rm.coat)
-        # glass and light housings are transparent in the game
-        if rm.application in ("appDepthSort",) or "GLASS" in (rm.flags or ()):
+        # glass and light housings are transparent in the game.  The 0.35 is the
+        # fallback for glass whose page carries no alpha at all - when the page
+        # *does* have one (badges, the wheel-blur mask, some light pages) the
+        # texture's own alpha is the real answer and goes in below.
+        glass = rm.application in ("appDepthSort",) or "GLASS" in (rm.flags or ())
+        if glass:
             _set_input(bsdf, "Alpha", 0.35)
         if "GLASS" in (rm.flags or ()):
             _set_input(bsdf, "Transmission Weight", 0.9)
@@ -1015,6 +1131,13 @@ def _build_preset_material(name: str, presets, active: int = 0):
             tex.location = (-560, -520 * order)
             tex.parent = frame
             nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+            wired = _wire_alpha(mat, tex, bsdf, image)
+            # A page with real alpha decides the transparency; a flat page
+            # leaves the glass fallback and the material stays OPAQUE.
+            if wired:
+                mat["rr3_alpha_from_texture"] = True
+            elif glass:
+                _set_alpha_mode(mat, "BLENDED")
 
         for slot, img, what in ((0, fresnel_img, "fresnel"),
                                 (1, spec_img, "specular")):
@@ -3757,6 +3880,156 @@ class RR3_OT_clear_custom_normals(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RR3_OT_weld_and_mark_sharp(bpy.types.Operator):
+    """Merge the split vertices, then keep the hard edges the file had
+
+    An RR3 mesh has no sharp-edge flags.  A hard edge is **two vertices in the
+    same place carrying different normals**, so the car looks right as imported
+    and falls apart the moment those vertices are merged: the two sides start
+    sharing one normal, the crease becomes a smooth gradient, and Blender's
+    "mark sharp by angle" cannot put it back because by then there is nothing
+    left that distinguishes a panel crease from a UV seam.
+
+    This operator remembers the normal every corner used **before** the merge,
+    welds, and then marks an edge sharp when the two faces that now share it
+    used different normals at either end:
+
+    * a UV seam - same normal on both sides - stays smooth
+    * a panel crease, a badge outline, the edge of a glass pane - different
+      normals - comes out sharp, exactly where it was
+
+    The comparison uses the ``rr3_normal`` attribute the importer writes (the
+    normals straight out of the ``.m3g``, which is ground truth).  A mesh from
+    an older import has no such attribute; the angles Blender computed for the
+    split halves are then only an approximation - they disagree slightly even
+    across a UV seam on a curved panel - so the threshold is raised to 30 deg
+    to keep seams from being marked.
+    """
+
+    bl_idname = "rr3.weld_and_mark_sharp"
+    bl_label = "Weld and keep hard edges"
+    bl_options = {"REGISTER", "UNDO"}
+
+    distance: FloatProperty(
+        name="Distance (m)", default=0.0001, min=1e-6, max=0.1,
+        precision=6,
+        description="Vertices closer together than this are merged. The shipped "
+                    "cars are in metres, so the default is a tenth of a "
+                    "millimetre; raise it only if a model really has doubled "
+                    "geometry",
+    )
+    angle: FloatProperty(
+        name="Sharp above (deg)", default=10.0, min=0.0, max=180.0,
+        description="An edge is marked sharp when the file's normals on its two "
+                    "sides differ by more than this. Used as-is when the mesh "
+                    "carries the rr3_normal attribute, raised to 30 deg when it "
+                    "does not",
+    )
+    selected_only: BoolProperty(
+        name="Selected objects only", default=True,
+        description="Weld the selected meshes instead of every mesh in the view "
+                    "layer",
+    )
+
+    def _weld_one(self, ob, context):
+        import bmesh
+
+        me = ob.data
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+        bm.normal_update()
+
+        layer = bm.verts.layers.float_vector.get("rr3_normal")
+
+        def key_of(co):
+            # 1e-5 m = 10 microns: far below any real vertex spacing, far above
+            # the float noise two copies of the same corner carry.
+            return (round(co.x, 5), round(co.y, 5), round(co.z, 5))
+
+        before = {}
+        for face in bm.faces:
+            seen = {}
+            for loop in face.loops:
+                n = loop.vert[layer] if layer is not None else loop.normal
+                seen[key_of(loop.vert.co)] = Vector(n)
+            before[face] = seen
+
+        verts_before = len(bm.verts)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=self.distance)
+        bm.normal_update()
+        merged = verts_before - len(bm.verts)
+
+        threshold = math.radians(self.angle if layer is not None
+                                 else max(self.angle, 30.0))
+        marked = 0
+        for edge in bm.edges:
+            faces = edge.link_faces
+            # An edge can end up with more than two faces: RR3 stacks decal and
+            # badge geometry on top of panels, so welding turns two coincident
+            # islands into a 3- or 4-face edge.  Comparing only the "exactly
+            # two" case left every crease around those overlays smooth, which is
+            # what the first cut of this operator did (82 deg off at the badge
+            # corners of the Chiron).
+            if len(faces) < 2:
+                continue
+            worst = 0.0
+            for i in range(len(faces)):
+                d1 = before.get(faces[i])
+                if not d1:
+                    continue
+                for j in range(i + 1, len(faces)):
+                    d2 = before.get(faces[j])
+                    if not d2:
+                        continue
+                    for vert in edge.verts:
+                        key = key_of(vert.co)
+                        a, b = d1.get(key), d2.get(key)
+                        if a is None or b is None:
+                            continue
+                        worst = max(worst, a.angle(b))
+            if worst > threshold:
+                edge.smooth = False
+                marked += 1
+
+        for face in bm.faces:
+            face.smooth = True
+        bm.to_mesh(me)
+        bm.free()
+        me.update()
+        return merged, marked, layer is not None
+
+    def execute(self, context):
+        objs = [ob for ob in context.view_layer.objects
+                if ob.type == "MESH"
+                and (not self.selected_only or ob.select_get())]
+        if not objs:
+            self.report({"WARNING"}, "no mesh objects to weld")
+            return {"CANCELLED"}
+        merged = marked = 0
+        from_file = 0
+        for ob in objs:
+            try:
+                m, s, exact = self._weld_one(ob, context)
+            except Exception as exc:  # noqa: BLE001
+                self.report({"WARNING"}, f"{ob.name}: {exc}")
+                continue
+            merged += m
+            marked += s
+            from_file += 1 if exact else 0
+        how = (f"{from_file}/{len(objs)} meshes used the file's own normals"
+               if from_file else "no rr3_normal attribute: angle-based, 30 deg")
+        self.report({"INFO"},
+                    f"{len(objs)} mesh(es): {merged} vertices merged, "
+                    f"{marked} edges marked sharp ({how})")
+        if from_file < len(objs):
+            self.report({"WARNING"},
+                        "some meshes had no rr3_normal attribute (imported before "
+                        "2026-11-25) - re-import them for exact creases")
+        return {"FINISHED"}
+
+
 class RR3_OT_catalog(bpy.types.Operator):
     bl_idname = "rr3.catalog"
     bl_label = "Material / Part Catalog"
@@ -4050,6 +4323,8 @@ class RR3_PT_panel(bpy.types.Panel):
         col.operator("rr3.audit_paint", text="Audit part materials", icon="VIEWZOOM")
         col.operator("rr3.clear_custom_normals", text="Make normals editable",
                      icon="NORMALS_FACE")
+        col.operator("rr3.weld_and_mark_sharp", text="Weld, keep hard edges",
+                     icon="AUTOMERGE_ON")
 
         box = layout.box()
         box.label(text="Reference", icon="INFO")
@@ -4255,6 +4530,7 @@ classes = (
     RR3_OT_audit_paint,
     RR3_OT_catalog,
     RR3_OT_clear_custom_normals,
+    RR3_OT_weld_and_mark_sharp,
     # reports and panel
     RR3_OT_report_to_text,
     RR3_OT_export_textures,

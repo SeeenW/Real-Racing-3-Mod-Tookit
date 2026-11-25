@@ -608,6 +608,127 @@ step("anchors: only the selected ones, and no silent fallback",
      _anchors_selected_only)
 
 
+def _texture_alpha():
+    """A page that uses alpha drives the shader; a flat page stays opaque.
+
+    Every depot page is a 32-bit DDS, so the channel count proves nothing.  On
+    the Chiron, `badges` runs 0..1 (cut-out -> DITHERED), `wheel_blur` 0.44..1
+    (gradient -> BLENDED) and the other six pages are flat 1.0.
+    """
+    depot = os.environ.get(
+        "RR3_DEPOT",
+        r"E:\DXT_480x320+960x640+2048x1536数据包-Build260716\files\.depot")
+    car = "2018_bugatti_chiron_sport"
+    src = os.path.join(depot, "vehicles", car, f"{car}_a.m3g")
+    if not os.path.isfile(src):
+        return "skipped (no depot)"
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.rr3_vehicle(filepath=src, lod="A", textures=True,
+                                     animate=False, import_anchors=False)
+
+    def linked(mat):
+        return any(link.to_socket.name == "Alpha"
+                   and link.from_node.type == "TEX_IMAGE"
+                   and link.from_socket.name == "Alpha"
+                   for link in mat.node_tree.links)
+
+    mats = {}
+    for ob in bpy.data.objects:
+        if ob.type != "MESH":
+            continue
+        for slot in ob.material_slots:
+            if slot.material is not None:
+                mats.setdefault(slot.material.name.rpartition("_mm_")[2],
+                                slot.material)
+    assert linked(mats["badges"]), "the badges page is not driving alpha"
+    assert linked(mats["wheel_blur"]), "the blur mask is not driving alpha"
+    assert not linked(mats["misc"]), "a flat page was wired to alpha"
+    assert getattr(mats["badges"], "surface_render_method", "DITHERED") == "DITHERED", \
+        "a cut-out should dither, not blend"
+    return f"{len(mats)} pages, badges dithers, blur blends, misc stays opaque"
+
+
+step("a texture's own alpha reaches the shader", _texture_alpha)
+
+
+def _weld_keeps_creases():
+    """Welding with this operator keeps the shading a plain weld destroys.
+
+    Measured against the mesh as imported (which is what the user sees), over
+    every face corner of the Chiron's body shell:
+
+        plain weld         mean 17.51 deg, 51.1 % of corners move 5 deg or more
+        weld + hard edges  mean  0.36 deg,  1.1 %
+
+    The 1.1 % left are decal and badge overlays whose authored normal disagrees
+    with their own geometry - that shading cannot survive a weld at all, because
+    it lives in the split vertices, not in the surface.
+    """
+    depot = os.environ.get(
+        "RR3_DEPOT",
+        r"E:\DXT_480x320+960x640+2048x1536数据包-Build260716\files\.depot")
+    car = "2018_bugatti_chiron_sport"
+    src = os.path.join(depot, "vehicles", car, f"{car}_a.m3g")
+    if not os.path.isfile(src):
+        return "skipped (no depot)"
+
+    import bmesh
+    import math
+
+    def snap(me):
+        cn = me.corner_normals
+        out = {}
+        for p in me.polygons:
+            centre = tuple(round(v, 4) for v in p.center)
+            for li in p.loop_indices:
+                v = tuple(round(x, 4) for x in me.vertices[me.loops[li].vertex_index].co)
+                out[(centre, v)] = tuple(cn[li].vector)
+        return out
+
+    def drift(before, after):
+        vals = []
+        for key in set(before) & set(after):
+            d = max(-1.0, min(1.0, sum(x * y for x, y in zip(before[key], after[key]))))
+            vals.append(math.degrees(math.acos(d)))
+        return sum(vals) / len(vals), sum(1 for v in vals if v > 5) / len(vals)
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.rr3_vehicle(filepath=src, lod="A", textures=False,
+                                     animate=False, import_anchors=False)
+    body = bpy.data.objects["LOD_A_BODY_mm_ext"]
+    before = snap(body.data)
+    assert "rr3_normal" in body.data.attributes, "the file normals are not kept"
+
+    plain = body.copy()
+    plain.data = body.data.copy()
+    bpy.context.scene.collection.objects.link(plain)
+    bm = bmesh.new()
+    bm.from_mesh(plain.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=1e-4)
+    bm.to_mesh(plain.data)
+    bm.free()
+    plain.data.update()
+    plain_mean, plain_over = drift(before, snap(plain.data))
+    bpy.data.objects.remove(plain, do_unlink=True)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    body.select_set(True)
+    bpy.context.view_layer.objects.active = body
+    bpy.ops.rr3.weld_and_mark_sharp(selected_only=True, distance=1e-4, angle=10.0)
+    mean, over = drift(before, snap(body.data))
+    sharp = sum(1 for e in body.data.edges if e.use_edge_sharp)
+    print(f"     plain weld mean {plain_mean:.2f} deg ({plain_over*100:.1f}% over 5), "
+          f"ours {mean:.2f} deg ({over*100:.1f}%), {sharp} sharp edges")
+    assert sharp > 100, f"only {sharp} edges marked sharp"
+    assert mean < 1.0, f"shading drifted {mean:.2f} deg on average"
+    assert over < 0.03, f"{over*100:.1f}% of corners moved 5 deg or more"
+    assert plain_mean > 10.0, "the comparison weld was not bad - test proves nothing"
+    return f"mean {mean:.2f} vs {plain_mean:.2f} deg, {sharp} creases kept"
+
+
+step("welding keeps the creases a plain weld loses", _weld_keeps_creases)
+
+
 print()
 if fails:
     print(f"SMOKE TEST: {len(fails)} FAILURE(S): {fails}")

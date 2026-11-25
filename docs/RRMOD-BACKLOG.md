@@ -1771,3 +1771,51 @@ anchors paragraph; six rows in the troubleshooting table). Tests: smoke 20 -> 23
 steps (the blur folder with its 8 meshes and their pivots; normals editable by
 default and still bakable, plus the repair operator; the selected-only anchors
 export and its refusal). Operators: 19 -> 20.
+
+## Round K: the alpha the pages were already carrying, and a weld that keeps creases
+
+### Texture alpha
+
+- [x] **"Four channels" proves nothing.** Every depot page is a 32-bit DDS. Measured
+  on the Chiron: `cab` / `int` / `lights` / `misc` / `sw` / `wheel` are flat 1.0;
+  `badges` is 60 % clear, 26 % opaque, 14 % in between (a cut-out); `wheel_blur`
+  has no clear pixels at all, 44 % in between, mean 0.839 (a soft mask). None of
+  it was reaching the shader - the glass fallback was a hard-coded Alpha 0.35.
+- [x] **`_image_alpha()`** reads the pixels through `foreach_get` into a preallocated
+  `array`, cached by image name + size: ~30 ms per page, once per import.
+- [x] **`_wire_alpha()`** links `Alpha` only when the page uses it, and picks the
+  method from the data: fully clear pixels present -> **DITHERED** (a cut-out,
+  where a real blend would sort two crossing badge quads wrongly); none -> 
+  **BLENDED** (a ramp, where dithering shows as noise).
+- [x] Wired in both material paths (name colours and game materials). The glass
+  0.35 now only applies when its page has no usable alpha; the material is tagged
+  `rr3_alpha_from_texture`.
+
+### Welding without losing the creases
+
+- [x] **The importer now keeps the file's normals as a `rr3_normal` attribute**
+  (POINT, FLOAT_VECTOR, 12 B/vertex), whether or not they are baked as custom
+  normals. Without it, nothing after a weld can tell a panel crease from a UV
+  seam.
+- [x] **`rr3.weld_and_mark_sharp`** (*Weld, keep hard edges*): record the normal
+  each corner used per (face, position), `remove_doubles`, then mark an edge
+  sharp when the faces that now share it used different normals at either end.
+  Edges with 3-4 faces are compared pairwise - welding stacks decal and badge
+  islands into the same edge, and the first cut skipped those, leaving every
+  crease around an overlay smooth (82 deg off on the Chiron's badge corners).
+- [x] **Measured** against the shading as imported, over all 19,554 face corners
+  of `LOD_A_BODY_mm_ext`:
+
+  | | mean | corners over 5 deg | worst |
+  |---|---|---|---|
+  | plain *Merge by Distance* | 17.51 deg | 51.1 % | 144.1 deg |
+  | weld + hard edges | 0.36 deg | 1.1 % | 82.3 deg |
+
+  1,790 edges marked, 5,965 vertices -> 3,655.
+- [x] The 1.1 % left are decal and badge overlays: their authored normal disagrees
+  with their own geometry (the decal takes the panel's shading). That can only
+  exist while the vertices are split, so no weld keeps it - the exact-shading
+  path stays "`file_normals` on, do not weld".
+
+Tests: smoke 23 -> 25 steps (the alpha wiring with its two modes; the weld against
+a plain merge, numbers above). Operators: 20 -> 21.

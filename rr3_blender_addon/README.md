@@ -87,6 +87,7 @@
 | | Switch paint scheme | `rr3.switch_paint` |
 | | Audit part materials | `rr3.audit_paint` |
 | | Make normals editable | `rr3.clear_custom_normals` |
+| | Weld, keep hard edges | `rr3.weld_and_mark_sharp` |
 | Reference | Material / part catalog | `rr3.catalog` |
 | | File report | `rr3.report_to_text` |
 
@@ -218,6 +219,38 @@
 > 已经导入的场景不用重新导：选中对象 → `N` 面板 → Car ▸ **Make normals editable**
 > （`rr3.clear_custom_normals`），会把自定义法向清掉并改成平滑着色。
 > 真要还原游戏原样再导出时，再把 `file_normals` 勾上。
+
+> **合并顶点（按距离合并）会毁掉硬边 —— 用 "Weld, keep hard edges"**
+> （`rr3.weld_and_mark_sharp`）。RR3 的硬边不是标记位，是「同一位置两个顶点、法向不同」，
+> 所以 Blender 自带的 *Merge by Distance* 一合就把硬边抹平了：两侧共用一条边、共用一个平均
+> 法向，棱变成缓坡，再想用「按角度标锐边」也标不回来（那时已经分不清是棱还是 UV 缝）。
+>
+> 这个 operator 的做法：**先把每个角原本用的法向记下来**（导入时文件里的法向已经存在网格的
+> `rr3_normal` 属性上），合并，然后把「合并后共用一条边、但两侧法向原本不同」的边标成锐边。
+> UV 缝两侧法向相同 → 保持平滑；板件棱、玻璃边、贴花轮廓 → 照样是硬的。
+>
+> 实测（Chiron 车身壳，19554 个面角，与导入时的着色对比）：
+>
+> | | 平均偏差 | 偏差 >5° 的面角 | 最坏 |
+> |---|---|---|---|
+> | 普通合并 | **17.51°** | **51.1%** | 144.1° |
+> | Weld, keep hard edges | **0.36°** | **1.1%** | 82.3° |
+>
+> 剩下那 1.1% 是**贴花/徽标叠层**：它们文件里的法向和自身几何差很远（贴花的染色靠面板法向），
+> 合并后只能按几何算，这种着色本来就只存在于"顶点被拆开"的状态里。
+> 参数：`distance`（默认 0.1 mm）、`angle`（默认 10°；没有 `rr3_normal` 属性的旧模型自动
+> 抬到 30°，因为那时只能拿 Blender 算出的角法向凑）。
+
+> **贴图自带的 alpha 现在会接到着色器上**：所有图集都是 32 位 DDS，所以"有 4 个通道"不能说明
+> 什么——`misc`/`lights`/`wheel` 的 alpha 全是 1.0。插件导入时**量一遍像素**（`foreach_get`，
+> 每页约 30 ms，按页缓存），只有真的用了 alpha 的页才接 `Alpha`：
+>
+> * `badges`（60% 全透明 / 26% 全不透明）→ 接 alpha + **DITHERED**（镂空，真混合会排序错）
+> * `wheel_blur`（没有全透明像素，alpha 从 0.44 起爬）→ 接 alpha + **BLENDED**（软遮罩）
+> * 其余平 alpha 的页 → 不接，材质保持不透明
+>
+> 玻璃那套固定 `Alpha = 0.35` 的兜底只在贴图**没有**可用 alpha 时才生效。材质上会打
+> `rr3_alpha_from_texture = True`。
 
 > **为什么需要 `wheel_size`**：游戏里的轮子网格是**一个 0.60 m 的通用模板**，每台车加载时
 > 按自己的轮胎直径径向拉伸（只拉 y/z，宽度不动）。全库 463 台车的模板半径变异系数只有
