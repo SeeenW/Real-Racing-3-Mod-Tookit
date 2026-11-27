@@ -1863,3 +1863,43 @@ turned out to be the same misunderstanding, mine.
 
 Tests: smoke 25 steps (the weld step now also proves the tyre bakes and lands
 within 1 deg of the file).
+
+## Round M: the "frozen normals" story was wrong, and the import now says so
+
+The user pushed back - "FBX doesn't break normals when you edit it" - and was
+right.  This round retracts the measurement that started the whole tangent.
+
+### What was actually measured (2026-11-27, 718, same car both ways)
+
+| | proportional-edit stroke of 0.35 m, edge normal gaps |
+|---|---|
+| FBX import | med 4.25 -> 4.24, p99 36.83 -> 36.83 |
+| this add-on, `file_normals` on | med 4.23 -> 4.23, p99 36.83 -> 36.83 |
+| this add-on, computed | med 3.99 -> 3.99, p99 32.35 -> 32.35 |
+
+Not one edge moved.  Same on the tyre (median 26.11 -> 26.11 before and after a
+0.08 m stroke).  Custom split normals are stored against a tangent basis, so they
+travel with the deformation.  The 2026-11-25 experiment that "proved" otherwise
+edited `vertex.co` directly and never ran an edit-mode transform.
+
+The two representations are also the same data: on the 718's body shell the FBX
+and this import disagree with their own computed normals by exactly the same
+amounts (med 0.06, p90 0.81, max 34.98, 0.0 % over 5 deg).
+
+### So the default goes back to baking - which is the FBX
+
+- [x] `file_normals` defaults to **on**: every mesh carries the `.m3g`'s own normals,
+      exactly what MonkeyTool's FBX has (split vertices + authored normals, no
+      sharp edges).
+- [x] With it off, the import decides **per mesh** (`_authored_normals_matter`):
+      bake where the authored normal is not something the geometry implies
+      (tyres 29.4 % of corners, wheels 10 %, calipers 13 %, badges, glass), leave
+      the panels to the geometry.  Reason to use it: reshaping a panel on purpose.
+- [x] What actually destroys the shading stays the **merge**, not the edit - the
+      custom layer outlives a topology change and overrides sharp-edge marks.
+      That is what *Weld, keep shading* exists for, with AUTO/FILE/SHARP modes.
+
+Docs corrected in `rr3_blender_addon/README.md` (the old "frozen, explode" note is
+replaced by the table above), `docs/插件使用手册.md` (task A note + two rows in the
+troubleshooting table).  Smoke: the normals step now asserts every mesh arrives
+baked and the tyre lands within 1 deg of the file.

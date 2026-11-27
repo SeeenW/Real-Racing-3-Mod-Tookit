@@ -406,6 +406,46 @@ def _looks_bone_local(meshes) -> bool:
     return hits >= max(4, int(len(meshes) * 0.8))
 
 
+#: Share of corners that may disagree before a mesh gets the file's normals
+#: baked.  Measured on the Chiron (Chiron LOD A, 107 meshes): tyres 29.4 %,
+#: mirror housings 14.8 %, calipers 13.2 %, steering wheel 13.1 %, wheels 10.0 %,
+#: boot 9.1 % - versus doors 2.1 %, front bumper 2.8 %, glass 4.5 %, interior
+#: 4.3 %, chassis 1.1 %.  Five percent sits in the gap between the two families.
+_BAKE_SHARE = 0.05
+
+#: A corner counts as "the file disagrees" past this angle.
+_BAKE_ANGLE = 5.0
+
+
+def _authored_normals_matter(me, normals):
+    """True when the file's normals say something the geometry cannot.
+
+    Shading an RR3 mesh from the geometry is near-perfect wherever the artist
+    left the normals alone - on a panel they sit a median 0.6 deg from the
+    computed ones.  Where they do not, no shading rule recovers them: the tyre's
+    UV seams were averaged per half, so its tread reads 9 deg off the file on
+    average and shows a ring (444 of 1,512 corners, worst 36 deg).
+
+    This is the same test :meth:`RR3_OT_weld_and_mark_sharp._mode_for` uses after
+    a weld, applied at import time so the model looks right without anyone
+    having to weld anything.
+    """
+    if not len(me.loops) or len(normals) != len(me.vertices):
+        return False
+    bad = total = 0
+    cn = me.corner_normals
+    for li, loop in enumerate(me.loops):
+        authored = normals[loop.vertex_index]
+        computed = cn[li].vector
+        dot = max(-1.0, min(1.0, authored[0] * computed[0]
+                            + authored[1] * computed[1]
+                            + authored[2] * computed[2]))
+        total += 1
+        if math.degrees(math.acos(dot)) > _BAKE_ANGLE:
+            bad += 1
+    return total > 0 and bad / total > _BAKE_SHARE
+
+
 def _build_mesh_object(md, scale: float, convert: bool, coll, offset=(0.0, 0.0, 0.0),
                        images=None, matrix=None, file_normals: bool = False):
     """Build one Blender mesh from an m3g mesh.
@@ -478,7 +518,31 @@ def _build_mesh_object(md, scale: float, convert: bool, coll, offset=(0.0, 0.0, 
         except Exception as exc:  # noqa: BLE001 - never fatal
             print(f"warning: {md.name}: file normals not kept ({exc})")
 
-    if file_normals and normals:
+    # Shade smooth *before* asking whether the authored normals matter: the
+    # question is compared against the normals Blender would use, and on a
+    # freshly built mesh whose faces are still flat those are the face normals -
+    # every corner then "disagrees" and the whole car gets baked (measured: 100
+    # of 107 meshes, body panels included).
+    if len(me.polygons):
+        me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
+        me.update()
+
+    bake = False
+    if normals:
+        if file_normals:
+            bake = True
+        else:
+            # Match the file, mesh by mesh - which is what MonkeyTool's FBX
+            # exports are: the split vertices carrying the authored normals.
+            # Measured over the Chiron's 107 LOD A meshes, the pages where the
+            # authored normal is *not* something the geometry implies are a
+            # clean family (tyres 29 % of corners, wheels 10 %, badges, glass),
+            # while the panels people reshape disagree on ~2 % of corners.  So
+            # bake where it matters and leave the rest to the geometry, which
+            # keeps proportional editing honest.
+            bake = _authored_normals_matter(me, normals)
+
+    if bake:
         try:
             me.normals_split_custom_set_from_vertices(normals)
         except Exception as exc:  # noqa: BLE001 - normals are a nicety, never fatal
@@ -1389,7 +1453,7 @@ def import_m3g_file(
     spread_step: float = 0.6,
     textures: bool = True,
     collection=None,
-    file_normals: bool = False,
+    file_normals: bool = True,
 ):
     m = m3glib.M3G(filepath)
     stem = os.path.splitext(os.path.basename(filepath))[0]
@@ -1651,7 +1715,7 @@ def import_vehicle_file(car_dir: str, car: str, *, lod: str = "A",
                         separate_damage: bool = True,
                         separate_camera: bool = True,
                         blur_wheels: bool = True,
-                        file_normals: bool = False,
+                        file_normals: bool = True,
                         parent_collection=None):
     """Import one car with its wheels mounted and its active-aero parts rigged.
 
@@ -2511,10 +2575,10 @@ class IMPORT_OT_rr3_m3g(Operator, ImportHelper):
     )
     file_normals: BoolProperty(
         name="Normals from the file",
-        description="Bake the normals the .m3g stores as custom split normals. "
-                    "Exact game shading, but frozen - deforming the mesh then "
-                    "shades as sharp triangles. Off lets Blender compute them",
-        default=False,
+        description="Bake the .m3g's own normals as custom split normals - what "
+                    "MonkeyTool's FBX carries, and what the game shows. Off lets "
+                    "Blender compute them, mesh by mesh where the two disagree",
+        default=True,
     )
 
     def execute(self, context):
@@ -3258,12 +3322,12 @@ class IMPORT_OT_rr3_vehicle(Operator, ImportHelper):
                     "is, so hide that one folder if they get in the way",
     )
     file_normals: BoolProperty(
-        name="Normals from the file", default=False,
-        description="Bake the normals the .m3g stores as custom split normals. "
-                    "Exact game shading, but frozen: proportional editing, "
-                    "sculpting and any deformation then shade as sharp "
-                    "triangles. Off lets Blender compute them - the same shading "
-                    "to within a degree, and editing stays correct",
+        name="Normals from the file", default=True,
+        description="Bake the .m3g's own normals as custom split normals, which "
+                    "is what MonkeyTool's FBX carries and what the game shows. "
+                    "Measured 2026-11-27: proportional editing does not disturb "
+                    "them. Turning this off lets Blender compute the normals "
+                    "instead, mesh by mesh where the two disagree",
     )
     material_depot: StringProperty(
         name="Depot", default="", subtype="DIR_PATH",

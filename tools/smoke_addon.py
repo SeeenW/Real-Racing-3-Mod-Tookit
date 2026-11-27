@@ -1,4 +1,5 @@
 """Headless smoke test for the RR3 Blender addon (run inside Blender)."""
+import math
 import os
 import sys
 import traceback
@@ -498,51 +499,83 @@ def _blur_wheels():
 step("the blur stand-in of each wheel lands in a folder of its own", _blur_wheels)
 
 
-def _normals_are_editable():
-    """No custom normals by default, and the opt-in still bakes them.
+def _normals_match_the_file():
+    """The import carries the file's normals, like MonkeyTool's FBX does.
 
-    Custom normals are frozen data: after a deform they no longer agree with the
-    surface, and the shading breaks into sharp triangles along a handful of
-    edges while the rest looks fine.  Measured on the Chiron's body shell, one
-    0.25 m stroke leaves 4 edges with a 58.9 deg normal discontinuity when they
-    are baked, and 0 with none (worst 0.04 deg).
+    The FBX reference keeps the split vertices *and* the authored normals; that
+    is also what the game draws, so it is the default here.  Measured 2026-11-27
+    on both the FBX and this import: a proportional-edit stroke moves vertices
+    0.35 m and leaves every edge's normal gap unchanged (med 4.25 -> 4.24,
+    p99 36.83 -> 36.83).  Custom normals follow the deformation; what destroys
+    them is a merge, which the weld operator handles.
+
+    ``file_normals=False`` falls back to computing them, mesh by mesh: panels get
+    computed normals, tyres and wheels keep the file's because theirs cannot be
+    computed at all.
     """
     depot = os.environ.get(
         "RR3_DEPOT",
-        r"E:\DXT_480x320+960x640+2048x1536数据包-Build260716\files\.depot")
+        r"E://DXT_480x320+960x640+2048x1536数据包-Build260716//files//.depot")
     car = "2018_bugatti_chiron_sport"
     src = os.path.join(depot, "vehicles", car, f"{car}_a.m3g")
-    if not os.path.isfile(src):
+    shared = os.path.join(depot, "vehicles", car, f"{car}_shared.m3g")
+    if not (os.path.isfile(src) and os.path.isfile(shared)):
         return "skipped (no depot)"
 
-    def imported(**kw):
+    def imported(path, lod, **kw):
         bpy.ops.wm.read_factory_settings(use_empty=True)
-        bpy.ops.import_scene.rr3_vehicle(filepath=src, lod="A", textures=False,
+        bpy.ops.import_scene.rr3_vehicle(filepath=path, lod=lod, textures=False,
                                          animate=False, import_anchors=False,
                                          blur_wheels=False, **kw)
         return [o for o in bpy.data.objects if o.type == "MESH"]
 
-    meshes = imported()
-    baked = [o.name for o in meshes if o.data.has_custom_normals]
-    assert not baked, f"{len(baked)} mesh(es) came in with baked normals"
+    def worst_vs_file(ob):
+        me = ob.data
+        attr = me.attributes.get("rr3_normal")
+        if attr is None:
+            return 999.0
+        cn = me.corner_normals
+        worst = 0.0
+        for p in me.polygons:
+            for li in p.loop_indices:
+                a = attr.data[me.loops[li].vertex_index].vector
+                b = cn[li].vector
+                d = max(-1.0, min(1.0, a.dot(b)))
+                worst = max(worst, math.degrees(math.acos(d)))
+        return worst
+
+    meshes = imported(src, "A")
+    unbaked = [o.name for o in meshes if not o.data.has_custom_normals]
+    assert not unbaked, f"{len(unbaked)} mesh(es) came in without the file's normals"
     flat = [o.name for o in meshes
             if o.data.polygons and not all(p.use_smooth for p in o.data.polygons)]
     assert not flat, f"{len(flat)} mesh(es) came in flat shaded"
 
-    meshes = imported(file_normals=True)
-    unbaked = [o.name for o in meshes if not o.data.has_custom_normals]
-    assert not unbaked, f"{len(unbaked)} mesh(es) ignored 'Normals from the file'"
+    imported(shared, "shared")
+    tyre = bpy.data.objects.get("LOD_A_TYRE_mm_tyre")
+    assert tyre is not None, "no tyre in the shared file"
+    worst = worst_vs_file(tyre)
+    assert worst < 1.0, f"the tyre is {worst:.2f} deg off the file"
 
-    # and the repair operator takes them off again
+    # computed mode: panels go back to geometry, tyres keep the file's normals
+    meshes = imported(src, "A", file_normals=False)
+    body = bpy.data.objects.get("LOD_A_BODY_mm_ext")
+    assert body is not None and not body.data.has_custom_normals, \
+        "with file_normals off the panel should shade from the geometry"
+    imported(shared, "shared", file_normals=False)
+    tyre = bpy.data.objects.get("LOD_A_TYRE_mm_tyre")
+    assert tyre.data.has_custom_normals, \
+        "the tyre should keep the file's normals even with file_normals off"
+
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.rr3.clear_custom_normals(selected_only=True)
     left = [o.name for o in bpy.data.objects
             if o.type == "MESH" and o.data.has_custom_normals]
     assert not left, f"{len(left)} mesh(es) kept their custom normals"
-    return f"{len(meshes)} meshes, both ways, and the repair operator"
+    return f"{len(meshes)} meshes baked, tyre within {worst:.2f} deg, repair works"
 
 
-step("normals are editable by default, and can still be baked", _normals_are_editable)
+step("normals match the file where the geometry cannot", _normals_match_the_file)
 
 
 def _anchors_selected_only():
@@ -710,8 +743,11 @@ def _weld_keeps_creases():
         return sum(vals) / len(vals), sum(1 for v in vals if v > 5) / len(vals)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    # Computed normals on the panels (file_normals off) so the weld has to do the
+    # work; with the default the mesh arrives baked and the operator just rebakes.
     bpy.ops.import_scene.rr3_vehicle(filepath=src, lod="A", textures=False,
-                                     animate=False, import_anchors=False)
+                                     animate=False, import_anchors=False,
+                                     file_normals=False)
     body = bpy.data.objects["LOD_A_BODY_mm_ext"]
     before = snap(body.data)
     assert "rr3_normal" in body.data.attributes, "the file normals are not kept"
