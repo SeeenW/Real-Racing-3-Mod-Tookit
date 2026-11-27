@@ -3881,35 +3881,61 @@ class RR3_OT_clear_custom_normals(bpy.types.Operator):
 
 
 class RR3_OT_weld_and_mark_sharp(bpy.types.Operator):
-    """Merge the split vertices, then keep the hard edges the file had
+    """Merge the split vertices without losing the shading the file had
 
     An RR3 mesh has no sharp-edge flags.  A hard edge is **two vertices in the
     same place carrying different normals**, so the car looks right as imported
     and falls apart the moment those vertices are merged: the two sides start
     sharing one normal, the crease becomes a smooth gradient, and Blender's
-    "mark sharp by angle" cannot put it back because by then there is nothing
-    left that distinguishes a panel crease from a UV seam.
+    "mark sharp by angle" cannot put it back because by then a panel crease and
+    a UV seam look exactly alike.
 
-    This operator remembers the normal every corner used **before** the merge,
-    welds, and then marks an edge sharp when the two faces that now share it
-    used different normals at either end:
+    This remembers the normal every corner used **before** the merge (the
+    ``rr3_normal`` attribute the importer writes - the numbers straight out of
+    the ``.m3g``), welds, and then either
 
-    * a UV seam - same normal on both sides - stays smooth
-    * a panel crease, a badge outline, the edge of a glass pane - different
-      normals - comes out sharp, exactly where it was
+    ``SHARP`` (default)
+        marks an edge sharp where the two faces that now share it used different
+        normals *and* the geometry really bends there, so UV seams and the soft
+        tread-to-sidewall transition keep their smooth shading while panels,
+        glass edges and badge outlines come out hard.  Blender then computes the
+        normals, which means they keep up with proportional editing and sculpting.
 
-    The comparison uses the ``rr3_normal`` attribute the importer writes (the
-    normals straight out of the ``.m3g``, which is ground truth).  A mesh from
-    an older import has no such attribute; the angles Blender computed for the
-    split halves are then only an approximation - they disagree slightly even
-    across a UV seam on a curved panel - so the threshold is raised to 30 deg
-    to keep seams from being marked.
+    ``FILE``
+        bakes the file's own per-corner normals onto the welded mesh, so it shades
+        exactly like the game - which is also what MonkeyTool's FBX exports are
+        (measured on the 718's shared file: 2,371 vertices over 1,709 positions,
+        custom normals, zero sharp edges).  Custom normals are frozen data:
+        editing the surface afterwards will not move them.
+
+    **A stale custom-normal layer is cleared first.**  That layer is what makes a
+    weld look broken: it survives the merge, overrides every sharp-edge decision
+    made here, and leaves the mesh shading from normals that no longer match its
+    geometry.  If the mesh was imported with ``file_normals`` on, this operator
+    drops those normals and rebuilds the shading (or re-bakes it, in ``FILE``).
     """
 
     bl_idname = "rr3.weld_and_mark_sharp"
-    bl_label = "Weld and keep hard edges"
+    bl_label = "Weld and keep the shading"
     bl_options = {"REGISTER", "UNDO"}
 
+    normals: EnumProperty(
+        name="After the weld",
+        items=(
+            ("AUTO", "Match the file, mesh by mesh",
+             "Per mesh: if its authored normals differ from the ones Blender "
+             "would compute (tyres, decals - the corners that make a visible "
+             "seam), bake them; otherwise mark creases sharp so the mesh stays "
+             "editable"),
+            ("SHARP", "Sharp edges (editable)",
+             "Mark the creases sharp and let Blender compute the normals, so "
+             "proportional editing and sculpting behave"),
+            ("FILE", "Bake the file's normals (exact look)",
+             "Restore the game's own per-corner normals after welding. Exact, "
+             "but frozen: deforming the mesh will not update them"),
+        ),
+        default="AUTO",
+    )
     distance: FloatProperty(
         name="Distance (m)", default=0.0001, min=1e-6, max=0.1,
         precision=6,
@@ -3921,9 +3947,15 @@ class RR3_OT_weld_and_mark_sharp(bpy.types.Operator):
     angle: FloatProperty(
         name="Sharp above (deg)", default=10.0, min=0.0, max=180.0,
         description="An edge is marked sharp when the file's normals on its two "
-                    "sides differ by more than this. Used as-is when the mesh "
-                    "carries the rr3_normal attribute, raised to 30 deg when it "
-                    "does not",
+                    "sides differ by more than this",
+    )
+    face_angle: FloatProperty(
+        name="...and the surface bends by (deg)", default=10.0, min=0.0, max=180.0,
+        description="Second condition: the two faces must also meet at more than "
+                    "this angle. Without it a UV seam on a curved panel - two "
+                    "authored normals that differ because each side of the seam "
+                    "was averaged separately - turns into a hard line, which is "
+                    "the ring that showed up on the tyre tread",
     )
     selected_only: BoolProperty(
         name="Selected objects only", default=True,
@@ -3931,10 +3963,65 @@ class RR3_OT_weld_and_mark_sharp(bpy.types.Operator):
                     "layer",
     )
 
+    @staticmethod
+    def _key(co):
+        # 1e-5 m = 10 microns: far below any real vertex spacing, far above the
+        # float noise two copies of the same corner carry.
+        return (round(co.x, 5), round(co.y, 5), round(co.z, 5))
+
+    def _mode_for(self, me):
+        """``SHARP`` or ``FILE`` for this mesh, when the caller said ``AUTO``.
+
+        The question a mesh has to answer is: *do the game's normals say
+        something Blender cannot work out from the geometry?*  Where they agree,
+        marking creases sharp is enough and leaves the mesh editable.  Where they
+        disagree, no set of sharp edges can reproduce them - the authored normal
+        is not a face average at all.
+
+        Measured on the Chiron, that split is clean:
+
+        * body shell - 180 of 19,554 corners disagree (0.9 %, mostly the decal
+          overlays) -> SHARP
+        * tyre - 444 of 1,512 corners disagree (29 %, worst 36 deg, because each
+          half of a UV seam was averaged separately on a coarse tread) -> FILE.
+          This is the ring that shows up on the tread even without welding.
+
+        The cut is "more than 5 % of corners disagree by more than 5 deg", which
+        over the Chiron's 107 LOD A meshes separates the two families cleanly:
+        tyres 29.4 %, mirror housings 14.8 %, calipers 13.2 %, the steering wheel
+        13.1 %, wheels 10.0 %, boot 9.1 % -> FILE; doors 2.1 %, front bumper
+        2.8 %, glass 4.5 %, interior 4.3 %, chassis 1.1 % -> SHARP.  Small hard
+        parts are the ones that look wrong when their shading is averaged, and
+        they are also the ones nobody reshapes; the panels people do reshape stay
+        editable.
+        """
+        if self.normals != "AUTO":
+            return self.normals
+        # A mesh that arrived with baked normals was imported with file_normals
+        # on: its corner normals *are* the file's, so the comparison below would
+        # read as "no disagreement" and send a tyre down the sharp-edge path.
+        # Whoever asked for the exact look gets it back.
+        if getattr(me, "has_custom_normals", False):
+            return "FILE"
+        attr = me.attributes.get("rr3_normal")
+        if attr is None or not len(me.loops):
+            return "SHARP"
+        bad = total = 0
+        cn = me.corner_normals
+        for li, loop in enumerate(me.loops):
+            authored = attr.data[loop.vertex_index].vector
+            computed = cn[li].vector
+            dot = max(-1.0, min(1.0, authored.dot(computed)))
+            total += 1
+            if math.degrees(math.acos(dot)) > 5.0:
+                bad += 1
+        return "FILE" if total and bad / total > 0.05 else "SHARP"
+
     def _weld_one(self, ob, context):
         import bmesh
 
         me = ob.data
+        mode = self._mode_for(me)
         bm = bmesh.new()
         bm.from_mesh(me)
         bm.verts.ensure_lookup_table()
@@ -3942,11 +4029,11 @@ class RR3_OT_weld_and_mark_sharp(bpy.types.Operator):
         bm.normal_update()
 
         layer = bm.verts.layers.float_vector.get("rr3_normal")
+        key_of = self._key
 
-        def key_of(co):
-            # 1e-5 m = 10 microns: far below any real vertex spacing, far above
-            # the float noise two copies of the same corner carry.
-            return (round(co.x, 5), round(co.y, 5), round(co.z, 5))
+        def face_key(verts):
+            # Keyed by geometry, not by face index: welding may reorder faces.
+            return tuple(sorted(key_of(v.co) for v in verts))
 
         before = {}
         for face in bm.faces:
@@ -3954,51 +4041,76 @@ class RR3_OT_weld_and_mark_sharp(bpy.types.Operator):
             for loop in face.loops:
                 n = loop.vert[layer] if layer is not None else loop.normal
                 seen[key_of(loop.vert.co)] = Vector(n)
-            before[face] = seen
+            before[face_key(face.verts)] = seen
 
         verts_before = len(bm.verts)
         bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=self.distance)
         bm.normal_update()
         merged = verts_before - len(bm.verts)
 
-        threshold = math.radians(self.angle if layer is not None
-                                 else max(self.angle, 30.0))
         marked = 0
-        for edge in bm.edges:
-            faces = edge.link_faces
-            # An edge can end up with more than two faces: RR3 stacks decal and
-            # badge geometry on top of panels, so welding turns two coincident
-            # islands into a 3- or 4-face edge.  Comparing only the "exactly
-            # two" case left every crease around those overlays smooth, which is
-            # what the first cut of this operator did (82 deg off at the badge
-            # corners of the Chiron).
-            if len(faces) < 2:
-                continue
-            worst = 0.0
-            for i in range(len(faces)):
-                d1 = before.get(faces[i])
-                if not d1:
+        if mode == "SHARP":
+            authored = math.radians(self.angle) if layer is not None else 0.0
+            bends = math.radians(self.face_angle if layer is not None else 180.0)
+            for edge in bm.edges:
+                faces = edge.link_faces
+                # An edge can end up with more than two faces: RR3 stacks decal
+                # and badge geometry on top of panels, so welding turns two
+                # coincident islands into a 3- or 4-face edge.  Comparing only
+                # the "exactly two" case left every crease around those overlays
+                # smooth (82 deg off at the badge corners of the Chiron).
+                if len(faces) < 2:
                     continue
-                for j in range(i + 1, len(faces)):
-                    d2 = before.get(faces[j])
-                    if not d2:
-                        continue
-                    for vert in edge.verts:
-                        key = key_of(vert.co)
-                        a, b = d1.get(key), d2.get(key)
-                        if a is None or b is None:
-                            continue
-                        worst = max(worst, a.angle(b))
-            if worst > threshold:
-                edge.smooth = False
-                marked += 1
+                by_file = 0.0
+                by_face = 0.0
+                for i in range(len(faces)):
+                    d1 = before.get(face_key(faces[i].verts))
+                    for j in range(i + 1, len(faces)):
+                        d2 = before.get(face_key(faces[j].verts))
+                        if d1 and d2:
+                            for vert in edge.verts:
+                                k = key_of(vert.co)
+                                a, b = d1.get(k), d2.get(k)
+                                if a is not None and b is not None:
+                                    by_file = max(by_file, a.angle(b))
+                        by_face = max(by_face, faces[i].normal.angle(faces[j].normal))
+                if by_file > authored and by_face > bends:
+                    edge.smooth = False
+                    marked += 1
 
         for face in bm.faces:
             face.smooth = True
         bm.to_mesh(me)
         bm.free()
+
+        # The stale layer is the reason a weld looks broken: it survives the
+        # merge and overrides everything decided above.
+        cleared = 0
+        if me.has_custom_normals:
+            try:
+                with context.temp_override(object=ob, active_object=ob,
+                                           selected_objects=[ob],
+                                           selected_editable_objects=[ob]):
+                    bpy.ops.mesh.customdata_custom_splitnormals_clear()
+                cleared = 1
+            except Exception as exc:  # noqa: BLE001 - report, never abort the weld
+                print(f"warning: {ob.name}: custom normals not cleared ({exc})")
+
+        if mode == "FILE":
+            # Bake the file's own corners back, keyed by geometry so the lookup
+            # survives whatever order the weld left the faces in.
+            per_loop = []
+            for poly in me.polygons:
+                fk = tuple(sorted(self._key(me.vertices[i].co) for i in poly.vertices))
+                seen = before.get(fk, {})
+                for li in poly.loop_indices:
+                    co = me.vertices[me.loops[li].vertex_index].co
+                    n = seen.get(self._key(co))
+                    per_loop.append(tuple(n) if n is not None else tuple(poly.normal))
+            if per_loop:
+                me.normals_split_custom_set(per_loop)
         me.update()
-        return merged, marked, layer is not None
+        return merged, marked, layer is not None, cleared, mode
 
     def execute(self, context):
         objs = [ob for ob in context.view_layer.objects
@@ -4007,26 +4119,36 @@ class RR3_OT_weld_and_mark_sharp(bpy.types.Operator):
         if not objs:
             self.report({"WARNING"}, "no mesh objects to weld")
             return {"CANCELLED"}
-        merged = marked = 0
-        from_file = 0
+        merged = marked = cleared = 0
+        exact = 0
+        modes = {}
         for ob in objs:
             try:
-                m, s, exact = self._weld_one(ob, context)
+                m, s, from_file, c, mode = self._weld_one(ob, context)
             except Exception as exc:  # noqa: BLE001
                 self.report({"WARNING"}, f"{ob.name}: {exc}")
                 continue
             merged += m
             marked += s
-            from_file += 1 if exact else 0
-        how = (f"{from_file}/{len(objs)} meshes used the file's own normals"
-               if from_file else "no rr3_normal attribute: angle-based, 30 deg")
-        self.report({"INFO"},
-                    f"{len(objs)} mesh(es): {merged} vertices merged, "
-                    f"{marked} edges marked sharp ({how})")
-        if from_file < len(objs):
+            cleared += c
+            exact += 1 if from_file else 0
+            modes[mode] = modes.get(mode, 0) + 1
+        if modes.get("FILE") and modes.get("SHARP"):
+            detail = (f"{modes['FILE']} baked to the file's normals, "
+                      f"{modes['SHARP']} kept as sharp-edged geometry")
+        elif modes.get("FILE"):
+            detail = "file normals baked back"
+        else:
+            detail = f"{marked} creases marked sharp"
+        msg = f"{len(objs)} mesh(es): {merged} vertices merged, {detail}"
+        if cleared:
+            msg += f", {cleared} stale custom-normal layer(s) cleared"
+        self.report({"INFO"}, msg)
+        if exact < len(objs):
             self.report({"WARNING"},
-                        "some meshes had no rr3_normal attribute (imported before "
-                        "2026-11-25) - re-import them for exact creases")
+                        f"{len(objs) - exact} mesh(es) have no rr3_normal attribute "
+                        "(imported before 2026-11-25) - re-import them, or the "
+                        "creases are guessed from the geometry alone")
         return {"FINISHED"}
 
 
@@ -4323,7 +4445,7 @@ class RR3_PT_panel(bpy.types.Panel):
         col.operator("rr3.audit_paint", text="Audit part materials", icon="VIEWZOOM")
         col.operator("rr3.clear_custom_normals", text="Make normals editable",
                      icon="NORMALS_FACE")
-        col.operator("rr3.weld_and_mark_sharp", text="Weld, keep hard edges",
+        col.operator("rr3.weld_and_mark_sharp", text="Weld, keep shading",
                      icon="AUTOMERGE_ON")
 
         box = layout.box()

@@ -658,7 +658,7 @@ def _weld_keeps_creases():
     every face corner of the Chiron's body shell:
 
         plain weld         mean 17.51 deg, 51.1 % of corners move 5 deg or more
-        weld + hard edges  mean  0.36 deg,  1.1 %
+        weld + hard edges  mean  0.42 deg,  1.1 %
 
     The 1.1 % left are decal and badge overlays whose authored normal disagrees
     with their own geometry - that shading cannot survive a weld at all, because
@@ -685,11 +685,28 @@ def _weld_keeps_creases():
                 out[(centre, v)] = tuple(cn[li].vector)
         return out
 
+    def snap_file(ob):
+        """(face centre, corner pos) -> the normal the .m3g stored there"""
+        me = ob.data
+        attr = me.attributes.get("rr3_normal")
+        out = {}
+        for p in me.polygons:
+            centre = tuple(round(v, 4) for v in p.center)
+            for li in p.loop_indices:
+                vi = me.loops[li].vertex_index
+                v = tuple(round(x, 4) for x in me.vertices[vi].co)
+                out[(centre, v)] = (tuple(attr.data[vi].vector) if attr
+                                    else tuple(p.normal))
+        return out
+
+    def angle_between(a, b):
+        d = max(-1.0, min(1.0, sum(x * y for x, y in zip(a, b))))
+        return math.degrees(math.acos(d))
+
     def drift(before, after):
         vals = []
         for key in set(before) & set(after):
-            d = max(-1.0, min(1.0, sum(x * y for x, y in zip(before[key], after[key]))))
-            vals.append(math.degrees(math.acos(d)))
+            vals.append(angle_between(before[key], after[key]))
         return sum(vals) / len(vals), sum(1 for v in vals if v > 5) / len(vals)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -714,7 +731,7 @@ def _weld_keeps_creases():
     bpy.ops.object.select_all(action="DESELECT")
     body.select_set(True)
     bpy.context.view_layer.objects.active = body
-    bpy.ops.rr3.weld_and_mark_sharp(selected_only=True, distance=1e-4, angle=10.0)
+    bpy.ops.rr3.weld_and_mark_sharp(selected_only=True, distance=1e-4)
     mean, over = drift(before, snap(body.data))
     sharp = sum(1 for e in body.data.edges if e.use_edge_sharp)
     print(f"     plain weld mean {plain_mean:.2f} deg ({plain_over*100:.1f}% over 5), "
@@ -723,7 +740,28 @@ def _weld_keeps_creases():
     assert mean < 1.0, f"shading drifted {mean:.2f} deg on average"
     assert over < 0.03, f"{over*100:.1f}% of corners moved 5 deg or more"
     assert plain_mean > 10.0, "the comparison weld was not bad - test proves nothing"
-    return f"mean {mean:.2f} vs {plain_mean:.2f} deg, {sharp} creases kept"
+    assert not body.data.has_custom_normals, \
+        "the body panel should stay editable, not get baked normals"
+
+    # AUTO picks FILE for the parts whose authored normals cannot be rebuilt from
+    # any sharp-edge partition - the tread ring is the visible symptom.
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    shared = os.path.join(depot, "vehicles", car, f"{car}_shared.m3g")
+    bpy.ops.import_scene.rr3_vehicle(filepath=shared, lod="shared", textures=False,
+                                     animate=False, import_anchors=False)
+    tyre = bpy.data.objects.get("LOD_A_TYRE_mm_tyre")
+    assert tyre is not None, "no tyre in the shared file"
+    tyre_file = snap_file(tyre)
+    bpy.ops.object.select_all(action="DESELECT")
+    tyre.select_set(True)
+    bpy.context.view_layer.objects.active = tyre
+    bpy.ops.rr3.weld_and_mark_sharp(selected_only=True, distance=1e-4)
+    assert tyre.data.has_custom_normals, "the tyre was not baked - the tread ring returns"
+    worst = max((angle_between(tyre_file[k], v)
+                 for k, v in snap(tyre.data).items() if k in tyre_file), default=0.0)
+    print(f"     tyre baked, worst deviation from the file {worst:.2f} deg")
+    assert worst < 1.0, f"the baked tyre is {worst:.2f} deg off the file"
+    return f"mean {mean:.2f} vs {plain_mean:.2f} deg, {sharp} creases, tyre baked"
 
 
 step("welding keeps the creases a plain weld loses", _weld_keeps_creases)

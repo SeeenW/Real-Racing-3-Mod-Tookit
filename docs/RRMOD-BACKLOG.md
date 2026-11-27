@@ -1819,3 +1819,47 @@ export and its refusal). Operators: 19 -> 20.
 
 Tests: smoke 23 -> 25 steps (the alpha wiring with its two modes; the weld against
 a plain merge, numbers above). Operators: 20 -> 21.
+
+## Round L: the weld that still broke, and the ring that was never the weld
+
+The user came back with "merging still wrecks the hard edges", plus a new
+symptom: a visible seam ring on the tyre tread that looks like a UV edge.  Both
+turned out to be the same misunderstanding, mine.
+
+### What the reference actually does
+
+- [x] **MonkeyTool's FBX is not welded.** Measured the 718's `_shared.fbx`:
+  `LOD_A_BONNETCAM_BODY_mm_ext` is **2,371 vertices over 1,709 positions**, carries
+  **custom normals**, and has **zero sharp edges**.  The model "looks fine" because
+  it is the split-vertex + authored-normal representation, exactly what the
+  `.m3g` holds.  No FBX in that folder has a sharp edge at all.
+
+### Why the first operator still failed
+
+- [x] **A stale custom-normal layer wins.** If the mesh was imported with
+  `file_normals` on (or comes from an older import), the CLNOR layer survives
+  `bm.to_mesh` and overrides every sharp-edge decision, so the mesh keeps shading
+  from normals that no longer match the geometry.  The operator now clears it and
+  says so: "N stale custom-normal layer(s) cleared".
+- [x] **The ring was there before any weld.** The tyre's authored normals differ
+  from what Blender computes by **mean 9.0 deg, worst 36 deg** (444 of 1,512
+  corners), because each half of a UV seam was averaged separately on a coarse
+  tread.  No set of sharp edges can reproduce an authored normal - only baking can.
+
+### The operator grew a mode
+
+- [x] **`AUTO` (default)**: per mesh, if more than 5 % of corners disagree by more
+  than 5 deg, bake the file's normals; otherwise mark creases sharp so the mesh
+  stays editable.  Over the Chiron's 107 LOD A meshes: tyres 29.4 %, mirror
+  housings 14.8 %, calipers 13.2 %, steering wheel 13.1 %, wheels 10.0 %, boot
+  9.1 % -> baked; doors 2.1 %, front bumper 2.8 %, glass 4.5 %, interior 4.3 %,
+  chassis 1.1 % -> sharp.
+- [x] **`FILE`** bakes every mesh (worst deviation from the file: body 0.4 deg,
+  tyre 0.0 deg) - the FBX-equivalent look.  **`SHARP`** marks creases only.
+- [x] `face_angle` (default 10 deg) is a second condition for marking: the surface
+  must actually bend there, so a UV seam on a curved panel cannot become a hard
+  line.  Without it the body shed 173 of its 1,790 creases and the drift went from
+  0.36 to 0.75 deg.
+
+Tests: smoke 25 steps (the weld step now also proves the tyre bakes and lands
+within 1 deg of the file).
